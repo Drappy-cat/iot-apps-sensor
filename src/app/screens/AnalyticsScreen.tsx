@@ -12,15 +12,65 @@ import { Download, Wind, Flame, AlertTriangle, Calendar, X, CheckCircle2 } from 
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
 
-const chartData = [
-  { time: "06:00", suhu: 22, kelembaban: 72 },
-  { time: "08:00", suhu: 24, kelembaban: 68 },
-  { time: "10:00", suhu: 27, kelembaban: 60 },
-  { time: "12:00", suhu: 30, kelembaban: 55 },
-  { time: "14:00", suhu: 28, kelembaban: 63 },
-  { time: "16:00", suhu: 26, kelembaban: 67 },
-  { time: "18:00", suhu: 24, kelembaban: 70 },
+export interface DataPoint {
+  time: string;
+  suhu: number;
+  kelembaban: number;
+}
+
+const dataHariIni: DataPoint[] = [
+  { time: "06:00", suhu: 22.1, kelembaban: 75 },
+  { time: "08:00", suhu: 24.3, kelembaban: 70 },
+  { time: "10:00", suhu: 27.5, kelembaban: 62 },
+  { time: "12:00", suhu: 30.2, kelembaban: 53 },
+  { time: "14:00", suhu: 29.4, kelembaban: 58 },
+  { time: "16:00", suhu: 26.8, kelembaban: 64 },
+  { time: "18:00", suhu: 24.1, kelembaban: 71 },
+  { time: "20:00", suhu: 23.0, kelembaban: 74 },
+  { time: "22:00", suhu: 22.5, kelembaban: 76 },
 ];
+
+const data7Hari: DataPoint[] = [
+  { time: "Senin", suhu: 25.4, kelembaban: 65 },
+  { time: "Selasa", suhu: 26.1, kelembaban: 63 },
+  { time: "Rabu", suhu: 24.8, kelembaban: 68 },
+  { time: "Kamis", suhu: 25.9, kelembaban: 64 },
+  { time: "Jumat", suhu: 26.5, kelembaban: 61 },
+  { time: "Sabtu", suhu: 27.2, kelembaban: 59 },
+  { time: "Minggu", suhu: 25.7, kelembaban: 66 },
+];
+
+const data30Hari: DataPoint[] = [
+  { time: "01 Mei", suhu: 25.1, kelembaban: 66 },
+  { time: "04 Mei", suhu: 25.4, kelembaban: 64 },
+  { time: "07 Mei", suhu: 26.2, kelembaban: 62 },
+  { time: "10 Mei", suhu: 25.8, kelembaban: 65 },
+  { time: "13 Mei", suhu: 24.9, kelembaban: 67 },
+  { time: "16 Mei", suhu: 26.7, kelembaban: 61 },
+  { time: "19 Mei", suhu: 27.1, kelembaban: 59 },
+  { time: "22 Mei", suhu: 25.5, kelembaban: 64 },
+  { time: "25 Mei", suhu: 26.3, kelembaban: 63 },
+  { time: "28 Mei", suhu: 25.9, kelembaban: 65 },
+  { time: "31 Mei", suhu: 26.0, kelembaban: 64 },
+];
+
+export function getFilteredData(filter: string): DataPoint[] {
+  if (filter === "Hari Ini") return dataHariIni;
+  if (filter === "7 Hari") return data7Hari;
+  if (filter === "30 Hari") return data30Hari;
+  
+  // Deterministic custom range fallback
+  return [
+    { time: "Tgl 1", suhu: 25.3, kelembaban: 64 },
+    { time: "Tgl 5", suhu: 26.0, kelembaban: 62 },
+    { time: "Tgl 10", suhu: 25.8, kelembaban: 65 },
+    { time: "Tgl 15", suhu: 26.5, kelembaban: 61 },
+    { time: "Tgl 20", suhu: 27.1, kelembaban: 59 },
+    { time: "Tgl 25", suhu: 25.4, kelembaban: 66 },
+    { time: "Tgl 28", suhu: 26.2, kelembaban: 63 },
+    { time: "Tgl 30", suhu: 25.9, kelembaban: 65 },
+  ];
+}
 
 const activityLog = [
   {
@@ -112,6 +162,15 @@ export function AnalyticsScreen() {
     return saved !== null ? saved === "true" : true;
   });
   const [exportSuccess, setExportSuccess] = useState(false);
+  const currentData = getFilteredData(activeFilter);
+  const avgTemp = (currentData.reduce((acc, curr) => acc + curr.suhu, 0) / currentData.length).toFixed(1);
+  const avgRH = (currentData.reduce((acc, curr) => acc + curr.kelembaban, 0) / currentData.length).toFixed(1);
+
+  let totalActivations = 12;
+  if (activeFilter === "Hari Ini") totalActivations = 8;
+  else if (activeFilter === "7 Hari") totalActivations = 54;
+  else if (activeFilter === "30 Hari") totalActivations = 216;
+  else totalActivations = 32;
 
   useEffect(() => { localStorage.setItem("gh_analytics_filter", activeFilter); }, [activeFilter]);
   useEffect(() => { localStorage.setItem("gh_analytics_activity_filter", activeActivityFilter); }, [activeActivityFilter]);
@@ -120,7 +179,7 @@ export function AnalyticsScreen() {
 
   const handleExportCSV = () => {
     let csvContent = "Waktu,Suhu (°C),Kelembaban (%)\n";
-    chartData.forEach(row => {
+    currentData.forEach(row => {
       csvContent += `${row.time},${row.suhu},${row.kelembaban}\n`;
     });
 
@@ -256,7 +315,7 @@ export function AnalyticsScreen() {
           </div>
 
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+            <AreaChart data={currentData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorSuhu" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#F97316" stopOpacity={0.25} />
@@ -311,9 +370,9 @@ export function AnalyticsScreen() {
         {/* Stats Row */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
           {[
-            { label: "Rata-rata Suhu", value: "26.1°C", color: "#F97316" },
-            { label: "Rata-rata RH", value: "64.3%", color: "#3B82F6" },
-            { label: "Total Aktivasi", value: "12x", color: "#22C55E" },
+            { label: "Rata-rata Suhu", value: `${avgTemp}°C`, color: "#F97316" },
+            { label: "Rata-rata RH", value: `${avgRH}%`, color: "#3B82F6" },
+            { label: "Total Aktivasi", value: `${totalActivations}x`, color: "#22C55E" },
           ].map((stat) => (
             <div
               key={stat.label}
