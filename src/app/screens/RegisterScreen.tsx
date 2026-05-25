@@ -14,6 +14,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+import { registerUser, User } from "../utils/authHelper";
+
 interface FormData {
   namaLengkap: string;
   idOperator: string;
@@ -106,11 +108,23 @@ export function RegisterScreen() {
   const handleSubmit = () => {
     setSubmitted(true);
     if (!validate()) return;
-    // Simulate registration
-    setTimeout(() => {
-      setSuccess(true);
-      setTimeout(() => navigate("/login"), 2200);
-    }, 800);
+
+    const newUser: User = {
+      namaLengkap: form.namaLengkap.trim(),
+      idOperator: form.idOperator.trim().toLowerCase(),
+      email: form.email.trim(),
+      role: form.role as any,
+      password: form.password,
+    };
+
+    const res = registerUser(newUser);
+    if (!res.success) {
+      setErrors((e) => ({ ...e, idOperator: res.error }));
+      return;
+    }
+
+    setSuccess(true);
+    setTimeout(() => navigate("/login"), 2200);
   };
 
   const pwStrength = passwordStrength(form.password);

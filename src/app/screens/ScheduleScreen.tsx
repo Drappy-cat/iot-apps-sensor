@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Sun, Moon, Clock, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
+import { getActiveUser } from "../utils/authHelper";
 
 interface Schedule {
   id: number;
@@ -15,6 +16,16 @@ interface Schedule {
 }
 
 export function ScheduleScreen() {
+  const activeUser = getActiveUser();
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
   const [schedules, setSchedules] = useState<Schedule[]>(() => {
     const saved = localStorage.getItem("gh_schedules");
     if (saved) {
@@ -53,6 +64,10 @@ export function ScheduleScreen() {
   }, [schedules]);
 
   const toggleSchedule = (id: number) => {
+    if (activeUser.role === "viewer") {
+      setToastMessage("Akses Ditolak: Peran Viewer tidak diizinkan mengubah jadwal.");
+      return;
+    }
     setSchedules((prev) =>
       prev.map((s) => (s.id === id ? { ...s, active: !s.active } : s))
     );
@@ -232,11 +247,12 @@ export function ScheduleScreen() {
                     height: "28px",
                     borderRadius: "14px",
                     background: schedule.active ? "#22C55E" : "var(--border-strong)",
-                    cursor: "pointer",
+                    cursor: activeUser.role === "viewer" ? "not-allowed" : "pointer",
                     position: "relative",
                     transition: "background 0.3s ease",
                     flexShrink: 0,
                     boxShadow: schedule.active ? "0px 2px 8px rgba(34,197,94,0.4)" : "none",
+                    opacity: activeUser.role === "viewer" ? 0.5 : 1,
                   }}
                 >
                   <div
@@ -278,29 +294,31 @@ export function ScheduleScreen() {
       </div>
 
       {/* FAB - Add */}
-      <motion.button
-        className="no-invert"
-        whileTap={{ scale: 0.9 }}
-        onClick={() => setIsModalOpen(true)}
-        style={{
-          position: "fixed",
-          bottom: "90px",
-          right: "20px",
-          width: "52px",
-          height: "52px",
-          borderRadius: "16px",
-          background: "#3B82F6",
-          border: "none",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0px 6px 16px rgba(59,130,246,0.45)",
-          zIndex: 50,
-        }}
-      >
-        <Plus size={24} color="white" strokeWidth={2.5} />
-      </motion.button>
+      {activeUser.role === "admin" && (
+        <motion.button
+          className="no-invert"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsModalOpen(true)}
+          style={{
+            position: "fixed",
+            bottom: "90px",
+            right: "20px",
+            width: "52px",
+            height: "52px",
+            borderRadius: "16px",
+            background: "#3B82F6",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0px 6px 16px rgba(59,130,246,0.45)",
+            zIndex: 50,
+          }}
+        >
+          <Plus size={24} color="white" strokeWidth={2.5} />
+        </motion.button>
+      )}
 
       {/* Add Schedule Modal */}
       <AnimatePresence>
@@ -438,6 +456,40 @@ export function ScheduleScreen() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            className="no-invert"
+            initial={{ opacity: 0, y: 50, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 50, x: "-50%" }}
+            style={{
+              position: "fixed",
+              bottom: "95px",
+              left: "50%",
+              background: "rgba(254, 226, 226, 0.9)",
+              border: "1.5px solid #FCA5A5",
+              borderRadius: "14px",
+              padding: "12px 20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              boxShadow: "0px 8px 24px rgba(239, 68, 68, 0.2)",
+              backdropFilter: "blur(8px)",
+              zIndex: 999,
+              width: "max-content",
+              maxWidth: "90%",
+            }}
+          >
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#EF4444" }} />
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#991B1B" }}>
+              {toastMessage}
+            </span>
+          </motion.div>
         )}
       </AnimatePresence>
 

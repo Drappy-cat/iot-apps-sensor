@@ -3,9 +3,13 @@ import { useNavigate } from "react-router";
 import { Bell, Wind, Flame, ThermometerSun, Droplets, CloudSun, Sun, CloudRain, CloudLightning } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
+import { getActiveUser } from "../utils/authHelper";
 
 export function DashboardScreen() {
   const navigate = useNavigate();
+  const activeUser = getActiveUser();
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const [setpoint, setSetpoint] = useState(() => {
     const saved = localStorage.getItem("gh_setpoint");
     return saved ? parseInt(saved, 10) : 25;
@@ -59,6 +63,17 @@ export function DashboardScreen() {
   const decrement = () => setSetpoint((p) => Math.max(0, p - 1));
   const increment = () => setSetpoint((p) => Math.min(50, p + 1));
 
+  const handleBlockedAction = () => {
+    setToastMessage("Akses Ditolak: Peran Viewer hanya dapat memantau data.");
+  };
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
   return (
     <div
       style={{
@@ -79,7 +94,24 @@ export function DashboardScreen() {
           boxShadow: "var(--glow-card)",
         }}
       >
-        <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>Beranda</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>Beranda</span>
+          {activeUser.role !== "admin" && (
+            <span
+              style={{
+                background: activeUser.role === "operator" ? "#DCFCE7" : "#FEE2E2",
+                color: activeUser.role === "operator" ? "#16A34A" : "#EF4444",
+                fontSize: "11px",
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: "6px",
+                textTransform: "uppercase",
+              }}
+            >
+              Mode {activeUser.role}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => navigate("/notifications")}
           style={{
@@ -313,21 +345,22 @@ export function DashboardScreen() {
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <motion.button
-              whileTap={{ scale: 0.85 }}
-              onClick={decrement}
+              whileTap={activeUser.role !== "viewer" ? { scale: 0.85 } : {}}
+              onClick={activeUser.role !== "viewer" ? decrement : handleBlockedAction}
               style={{
                 width: "48px",
                 height: "48px",
                 borderRadius: "50%",
                 background: "var(--bg-hover)",
                 border: "none",
-                cursor: "pointer",
+                cursor: activeUser.role === "viewer" ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: "24px",
                 fontWeight: 300,
                 color: "var(--text-muted)",
+                opacity: activeUser.role === "viewer" ? 0.45 : 1,
               }}
             >
               −
@@ -361,22 +394,23 @@ export function DashboardScreen() {
               <p style={{ fontSize: "12px", color: "var(--icon-muted)", marginTop: "4px" }}>Target Setpoint</p>
             </div>
             <motion.button
-              whileTap={{ scale: 0.85 }}
-              onClick={increment}
+              whileTap={activeUser.role !== "viewer" ? { scale: 0.85 } : {}}
+              onClick={activeUser.role !== "viewer" ? increment : handleBlockedAction}
               style={{
                 width: "48px",
                 height: "48px",
                 borderRadius: "50%",
-                background: "#3B82F6",
+                background: activeUser.role === "viewer" ? "var(--bg-hover)" : "#3B82F6",
                 border: "none",
-                cursor: "pointer",
+                cursor: activeUser.role === "viewer" ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: "24px",
                 fontWeight: 300,
-                color: "white",
-                boxShadow: "var(--glow-primary)",
+                color: activeUser.role === "viewer" ? "var(--text-muted)" : "white",
+                boxShadow: activeUser.role === "viewer" ? "none" : "var(--glow-primary)",
+                opacity: activeUser.role === "viewer" ? 0.45 : 1,
               }}
             >
               +
@@ -490,6 +524,40 @@ export function DashboardScreen() {
           </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            className="no-invert"
+            initial={{ opacity: 0, y: 50, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 50, x: "-50%" }}
+            style={{
+              position: "fixed",
+              bottom: "95px",
+              left: "50%",
+              background: "rgba(254, 226, 226, 0.9)",
+              border: "1.5px solid #FCA5A5",
+              borderRadius: "14px",
+              padding: "12px 20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              boxShadow: "0px 8px 24px rgba(239, 68, 68, 0.2)",
+              backdropFilter: "blur(8px)",
+              zIndex: 999,
+              width: "max-content",
+              maxWidth: "90%",
+            }}
+          >
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#EF4444" }} />
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#991B1B" }}>
+              {toastMessage}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <BottomNav />
     </div>

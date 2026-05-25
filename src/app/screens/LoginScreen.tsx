@@ -4,6 +4,7 @@ import { Eye, EyeOff, QrCode, KeyRound, RefreshCw, CheckCircle2, Smartphone, Wif
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "motion/react";
 import { useThemeTransition } from "../hooks/useThemeTransition";
+import { loginUser, seedDefaultUsers, setActiveUser } from "../utils/authHelper";
 
 type LoginTab = "password" | "qrcode";
 type QrStatus = "waiting" | "scanning" | "scanned" | "success";
@@ -28,11 +29,8 @@ export function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(null), 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
+    seedDefaultUsers();
+  }, []);
 
   const handleLogin = () => {
     setError(null);
@@ -44,11 +42,11 @@ export function LoginScreen() {
     setLoading(true);
     setTimeout(() => { 
       setLoading(false); 
-      // Simulasi validasi login
-      if (email === "admin" && password === "admin") {
+      const res = loginUser(email, password);
+      if (res.success) {
         navigate("/dashboard"); 
       } else {
-        setError("Email atau kata sandi salah! Coba admin / admin");
+        setError(res.error || "Email atau kata sandi salah!");
       }
     }, 1200);
   };
@@ -479,7 +477,13 @@ function QrLoginPanel({ onSuccess }: { onSuccess: () => void }) {
 
   useEffect(() => {
     if (status !== "success") return;
-    const t4 = setTimeout(onSuccess, 1800);
+    const t4 = setTimeout(() => {
+      // Auto login as default Admin when QR code login succeeds!
+      const defaultUsers = seedDefaultUsers();
+      const adminUser = defaultUsers.find(u => u.role === "admin") || defaultUsers[0];
+      setActiveUser(adminUser);
+      onSuccess();
+    }, 1800);
     return () => clearTimeout(t4);
   }, [status, onSuccess]);
 
