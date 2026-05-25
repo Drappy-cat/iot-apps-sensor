@@ -14,7 +14,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-import { registerUser, User } from "../utils/authHelper";
+import { registerUser, type User } from "../utils/authHelper";
 
 interface FormData {
   namaLengkap: string;
