@@ -12,21 +12,21 @@ Proyek ini dikembangkan sebagai bagian dari program **LPPM (Lembaga Penelitian d
 
 ---
 
-## ✨ Fitur Utama
+## Fitur Utama
 
 Aplikasi ini dilengkapi dengan fitur premium untuk manajemen greenhouse modern:
 
-*   **📊 Dasbor Real-time**: Memantau suhu udara, kelembaban, dan prakiraan kondisi cuaca di dalam greenhouse secara instan dan responsif.
-*   **🤖 Transparansi Fuzzy Logic**: Menampilkan inferensi keputusan AI (Fuzzy Logic) secara langsung, termasuk aturan yang sedang aktif (*rule activation*) dan tingkat keyakinan (*confidence level*) keputusan sistem terhadap aktuator.
-*   **⚙️ Kontrol Setpoint**: Memungkinkan pengguna untuk menyesuaikan target suhu ideal secara manual dengan antarmuka yang dinamis.
-*   **🛡️ Akses Berbasis Peran (RBAC)**: Keamanan ekstra dengan pembatasan hak akses untuk 3 peran pengguna:
+*   **Dasbor Real-time**: Memantau suhu udara, kelembaban, dan prakiraan kondisi cuaca di dalam greenhouse secara instan dan responsif.
+*   **Transparansi Fuzzy Logic**: Menampilkan inferensi keputusan AI (Fuzzy Logic) secara langsung, termasuk aturan yang sedang aktif (*rule activation*) dan tingkat keyakinan (*confidence level*) keputusan sistem terhadap aktuator.
+*   **Kontrol Setpoint**: Memungkinkan pengguna untuk menyesuaikan target suhu ideal secara manual dengan antarmuka yang dinamis.
+*   **Akses Berbasis Peran (RBAC)**: Keamanan ekstra dengan pembatasan hak akses untuk 3 peran pengguna:
     *   `Admin`: Hak akses penuh untuk seluruh konfigurasi dan kontrol sistem.
     *   `Operator`: Dapat mengubah setpoint suhu dan melihat data analitik.
     *   `Viewer`: Hanya memiliki akses memantau data (*read-only*) tanpa bisa mengubah kontrol.
-*   **📈 Analisis Grafik Interaktif**: Menyajikan riwayat data lingkungan dalam bentuk chart interaktif menggunakan *Recharts* untuk analisis jangka panjang.
-*   **📅 Penjadwalan Otomatis**: Fitur manajemen jadwal aktifnya aktuator (seperti pompa siram atau lampu pemanas) berdasarkan waktu tertentu.
-*   **🔔 Sistem Notifikasi**: Peringatan waktu nyata (*real-time alerts*) jika parameter lingkungan melebihi batas aman yang ditentukan.
-*   **📱 Multiplatform**: Dibangun dengan Capacitor sehingga siap dikompilasi langsung menjadi aplikasi Android (.apk).
+*   **Analisis Grafik Interaktif**: Menyajikan riwayat data lingkungan dalam bentuk chart interaktif menggunakan *Recharts* untuk analisis jangka panjang.
+*   **Penjadwalan Otomatis**: Fitur manajemen jadwal aktifnya aktuator (seperti pompa siram atau lampu pemanas) berdasarkan waktu tertentu.
+*   **Sistem Notifikasi**: Peringatan waktu nyata (*real-time alerts*) jika parameter lingkungan melebihi batas aman yang ditentukan.
+*   **Multiplatform**: Dibangun dengan Capacitor sehingga siap dikompilasi langsung menjadi aplikasi Android (.apk).
 
 ---
 
@@ -111,6 +111,14 @@ Untuk memaketkan aplikasi web ini menjadi aplikasi Android, ikuti langkah beriku
    ```bash
    npx cap open android
    ```
+
+---
+
+## 👥 Tim Pengembang
+
+Proyek ini dibangun dan dikembangkan oleh:
+*   **Rizma Indra** - *Lead IoT & Frontend Developer* - [@Drappy-cat](https://github.com/Drappy-cat)
+*   **LPPM Universitas Negeri Surabaya (UNESA)** - *Lembaga Pendukung & Riset Lapangan*
 
 ---
 
