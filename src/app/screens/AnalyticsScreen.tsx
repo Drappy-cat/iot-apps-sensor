@@ -8,78 +8,68 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Download, Wind, Flame, AlertTriangle, Calendar, X, CheckCircle2 } from "lucide-react";
+import { Download, Droplets, AlertTriangle, Calendar, X, CheckCircle2, Sprout, Activity, Zap, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
 
-export interface DataPoint {
+export interface SoilDataPoint {
   time: string;
+  moisture: number;
   suhu: number;
-  kelembaban: number;
+  ph: number;
+  ec: number;
+  n: number;
+  p: number;
+  k: number;
 }
 
-const dataHariIni: DataPoint[] = [
-  { time: "06:00", suhu: 22.1, kelembaban: 75 },
-  { time: "08:00", suhu: 24.3, kelembaban: 70 },
-  { time: "10:00", suhu: 27.5, kelembaban: 62 },
-  { time: "12:00", suhu: 30.2, kelembaban: 53 },
-  { time: "14:00", suhu: 29.4, kelembaban: 58 },
-  { time: "16:00", suhu: 26.8, kelembaban: 64 },
-  { time: "18:00", suhu: 24.1, kelembaban: 71 },
-  { time: "20:00", suhu: 23.0, kelembaban: 74 },
-  { time: "22:00", suhu: 22.5, kelembaban: 76 },
+const dataHariIni: SoilDataPoint[] = [
+  { time: "06:00", moisture: 72.0, suhu: 23.1, ph: 6.6, ec: 1250, n: 45, p: 32, k: 110 },
+  { time: "08:00", moisture: 68.5, suhu: 24.5, ph: 6.7, ec: 1300, n: 46, p: 34, k: 112 },
+  { time: "10:00", moisture: 64.2, suhu: 27.2, ph: 6.7, ec: 1350, n: 48, p: 35, k: 115 },
+  { time: "12:00", moisture: 58.0, suhu: 29.8, ph: 6.8, ec: 1420, n: 47, p: 35, k: 116 },
+  { time: "14:00", moisture: 63.4, suhu: 29.1, ph: 6.8, ec: 1390, n: 49, p: 36, k: 118 },
+  { time: "16:00", moisture: 66.8, suhu: 26.5, ph: 6.7, ec: 1340, n: 48, p: 35, k: 115 },
+  { time: "18:00", moisture: 69.1, suhu: 24.8, ph: 6.6, ec: 1310, n: 47, p: 34, k: 114 },
+  { time: "20:00", moisture: 71.0, suhu: 23.9, ph: 6.6, ec: 1280, n: 46, p: 33, k: 112 },
+  { time: "22:00", moisture: 71.8, suhu: 23.2, ph: 6.6, ec: 1260, n: 45, p: 33, k: 111 },
 ];
 
-const data7Hari: DataPoint[] = [
-  { time: "Senin", suhu: 25.4, kelembaban: 65 },
-  { time: "Selasa", suhu: 26.1, kelembaban: 63 },
-  { time: "Rabu", suhu: 24.8, kelembaban: 68 },
-  { time: "Kamis", suhu: 25.9, kelembaban: 64 },
-  { time: "Jumat", suhu: 26.5, kelembaban: 61 },
-  { time: "Sabtu", suhu: 27.2, kelembaban: 59 },
-  { time: "Minggu", suhu: 25.7, kelembaban: 66 },
+const data7Hari: SoilDataPoint[] = [
+  { time: "Senin", moisture: 67.2, suhu: 25.4, ph: 6.6, ec: 1320, n: 46, p: 33, k: 112 },
+  { time: "Selasa", moisture: 65.8, suhu: 26.1, ph: 6.7, ec: 1350, n: 48, p: 35, k: 115 },
+  { time: "Rabu", moisture: 69.0, suhu: 24.8, ph: 6.6, ec: 1290, n: 47, p: 34, k: 114 },
+  { time: "Kamis", moisture: 64.5, suhu: 25.9, ph: 6.7, ec: 1380, n: 49, p: 36, k: 118 },
+  { time: "Jumat", moisture: 66.1, suhu: 26.5, ph: 6.8, ec: 1360, n: 48, p: 35, k: 115 },
+  { time: "Sabtu", moisture: 63.8, suhu: 27.2, ph: 6.7, ec: 1410, n: 50, p: 37, k: 120 },
+  { time: "Minggu", moisture: 68.4, suhu: 25.7, ph: 6.6, ec: 1330, n: 47, p: 34, k: 113 },
 ];
 
-const data30Hari: DataPoint[] = [
-  { time: "01 Mei", suhu: 25.1, kelembaban: 66 },
-  { time: "04 Mei", suhu: 25.4, kelembaban: 64 },
-  { time: "07 Mei", suhu: 26.2, kelembaban: 62 },
-  { time: "10 Mei", suhu: 25.8, kelembaban: 65 },
-  { time: "13 Mei", suhu: 24.9, kelembaban: 67 },
-  { time: "16 Mei", suhu: 26.7, kelembaban: 61 },
-  { time: "19 Mei", suhu: 27.1, kelembaban: 59 },
-  { time: "22 Mei", suhu: 25.5, kelembaban: 64 },
-  { time: "25 Mei", suhu: 26.3, kelembaban: 63 },
-  { time: "28 Mei", suhu: 25.9, kelembaban: 65 },
-  { time: "31 Mei", suhu: 26.0, kelembaban: 64 },
+const data30Hari: SoilDataPoint[] = [
+  { time: "01 Mei", moisture: 66.4, suhu: 25.1, ph: 6.6, ec: 1310, n: 45, p: 32, k: 110 },
+  { time: "05 Mei", moisture: 65.1, suhu: 25.4, ph: 6.7, ec: 1340, n: 47, p: 34, k: 114 },
+  { time: "10 Mei", moisture: 63.8, suhu: 26.2, ph: 6.7, ec: 1380, n: 49, p: 36, k: 118 },
+  { time: "15 Mei", moisture: 67.0, suhu: 25.8, ph: 6.6, ec: 1320, n: 46, p: 33, k: 112 },
+  { time: "20 Mei", moisture: 68.5, suhu: 24.9, ph: 6.6, ec: 1300, n: 48, p: 35, k: 115 },
+  { time: "25 Mei", moisture: 64.2, suhu: 26.7, ph: 6.8, ec: 1400, n: 51, p: 38, k: 122 },
+  { time: "30 Mei", moisture: 66.0, suhu: 26.0, ph: 6.7, ec: 1350, n: 48, p: 35, k: 115 },
 ];
 
-export function getFilteredData(filter: string): DataPoint[] {
+export function getFilteredData(filter: string): SoilDataPoint[] {
   if (filter === "Hari Ini") return dataHariIni;
   if (filter === "7 Hari") return data7Hari;
   if (filter === "30 Hari") return data30Hari;
-  
-  // Deterministic custom range fallback
-  return [
-    { time: "Tgl 1", suhu: 25.3, kelembaban: 64 },
-    { time: "Tgl 5", suhu: 26.0, kelembaban: 62 },
-    { time: "Tgl 10", suhu: 25.8, kelembaban: 65 },
-    { time: "Tgl 15", suhu: 26.5, kelembaban: 61 },
-    { time: "Tgl 20", suhu: 27.1, kelembaban: 59 },
-    { time: "Tgl 25", suhu: 25.4, kelembaban: 66 },
-    { time: "Tgl 28", suhu: 26.2, kelembaban: 63 },
-    { time: "Tgl 30", suhu: 25.9, kelembaban: 65 },
-  ];
+  return dataHariIni;
 }
 
 const activityLog = [
   {
     id: 1,
-    icon: Wind,
+    icon: Droplets,
     iconColor: "#22C55E",
     iconBg: "#F0FDF4",
     time: "14:05 WIB",
-    desc: "Suhu ruangan mencapai 30°C. Kipas sirkulasi otomatis diaktifkan.",
+    desc: "Kelembaban tanah turun ke 58%. Pompa irigasi tetes diaktifkan selama 10 menit.",
     type: "success",
   },
   {
@@ -88,28 +78,27 @@ const activityLog = [
     iconColor: "#F97316",
     iconBg: "#FFF7ED",
     time: "11:30 WIB",
-    desc: "Kelembaban turun ke 55%. Sistem mencatat kondisi di luar batas optimal.",
+    desc: "Unsur Nitrogen terdeteksi 28 mg/kg (sedikit di bawah target ideal).",
     type: "warning",
   },
   {
     id: 3,
-    icon: Flame,
+    icon: Sprout,
     iconColor: "var(--text-muted)",
     iconBg: "var(--bg-app)",
     time: "06:15 WIB",
-    desc: "Pemanas dinonaktifkan. Suhu pagi mencapai target 24°C.",
+    desc: "Penyiraman nutrisi otomatis selesai. pH tanah stabil di angka 6.7.",
     type: "info",
   },
 ];
 
 const filters = ["Hari Ini", "7 Hari", "30 Hari", "Lainnya"];
 const activityFilters = ["Semua", "Peringatan", "Sukses", "Info"];
-const activityFilterColors: { [key: string]: { border: string, bg: string, text: string } } = {
-  "Semua": { border: "var(--border-subtle)", bg: "var(--bg-card)", text: "var(--text-muted)" },
-  "Peringatan": { border: "#F97316", bg: "#FFF7ED", text: "#F97316" },
-  "Sukses": { border: "#22C55E", bg: "#F0FDF4", text: "#22C55E" },
-  "Info": { border: "var(--text-muted)", bg: "var(--bg-app)", text: "var(--text-muted)" },
-};
+const chartModes = [
+  { id: "moisture_temp", label: "Kelembaban & Suhu" },
+  { id: "npk", label: "Unsur NPK" },
+  { id: "ph_ec", label: "pH & EC" },
+];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -136,8 +125,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               }}
             />
             <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-              {p.value}
-              {p.name === "suhu" ? "°C" : "%"}
+              {p.name.toUpperCase()}: {p.value}
+              {p.name === "suhu" ? "°C" : p.name === "moisture" ? "%" : p.name === "ec" ? " µS" : p.name === "ph" ? "" : " mg/kg"}
             </span>
           </div>
         ))}
@@ -148,39 +137,30 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function AnalyticsScreen() {
-  const [activeFilter, setActiveFilter] = useState(() => localStorage.getItem("gh_analytics_filter") || "Hari Ini");
-  const [activeActivityFilter, setActiveActivityFilter] = useState(() => localStorage.getItem("gh_analytics_activity_filter") || "Semua");
+  const [activeFilter, setActiveFilter] = useState(() => localStorage.getItem("iot_analytics_filter") || "Hari Ini");
+  const [activeChartMode, setActiveChartMode] = useState<"moisture_temp" | "npk" | "ph_ec">("moisture_temp");
+  const [activeActivityFilter, setActiveActivityFilter] = useState(() => localStorage.getItem("iot_analytics_activity_filter") || "Semua");
   const [isDateModalOpen, setDateModalOpen] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [showSuhu, setShowSuhu] = useState(() => {
-    const saved = localStorage.getItem("gh_analytics_show_suhu");
-    return saved !== null ? saved === "true" : true;
-  });
-  const [showKelembaban, setShowKelembaban] = useState(() => {
-    const saved = localStorage.getItem("gh_analytics_show_kelembaban");
-    return saved !== null ? saved === "true" : true;
-  });
   const [exportSuccess, setExportSuccess] = useState(false);
+
   const currentData = getFilteredData(activeFilter);
+  const avgMoisture = (currentData.reduce((acc, curr) => acc + curr.moisture, 0) / currentData.length).toFixed(1);
   const avgTemp = (currentData.reduce((acc, curr) => acc + curr.suhu, 0) / currentData.length).toFixed(1);
-  const avgRH = (currentData.reduce((acc, curr) => acc + curr.kelembaban, 0) / currentData.length).toFixed(1);
 
   let totalActivations = 12;
-  if (activeFilter === "Hari Ini") totalActivations = 8;
-  else if (activeFilter === "7 Hari") totalActivations = 54;
-  else if (activeFilter === "30 Hari") totalActivations = 216;
-  else totalActivations = 32;
+  if (activeFilter === "Hari Ini") totalActivations = 4;
+  else if (activeFilter === "7 Hari") totalActivations = 28;
+  else if (activeFilter === "30 Hari") totalActivations = 112;
 
-  useEffect(() => { localStorage.setItem("gh_analytics_filter", activeFilter); }, [activeFilter]);
-  useEffect(() => { localStorage.setItem("gh_analytics_activity_filter", activeActivityFilter); }, [activeActivityFilter]);
-  useEffect(() => { localStorage.setItem("gh_analytics_show_suhu", showSuhu.toString()); }, [showSuhu]);
-  useEffect(() => { localStorage.setItem("gh_analytics_show_kelembaban", showKelembaban.toString()); }, [showKelembaban]);
+  useEffect(() => { localStorage.setItem("iot_analytics_filter", activeFilter); }, [activeFilter]);
+  useEffect(() => { localStorage.setItem("iot_analytics_activity_filter", activeActivityFilter); }, [activeActivityFilter]);
 
   const handleExportCSV = () => {
-    let csvContent = "Waktu,Suhu (°C),Kelembaban (%)\n";
+    let csvContent = "Waktu,Kelembaban (%),Suhu Tanah (°C),pH Tanah,EC (uS/cm),Nitrogen (mg/kg),Fosfor (mg/kg),Kalium (mg/kg)\n";
     currentData.forEach(row => {
-      csvContent += `${row.time},${row.suhu},${row.kelembaban}\n`;
+      csvContent += `${row.time},${row.moisture},${row.suhu},${row.ph},${row.ec},${row.n},${row.p},${row.k}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -188,7 +168,7 @@ export function AnalyticsScreen() {
     
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Riwayat_Sensor_${activeFilter.replace(/\s+/g, "_")}.csv`);
+    link.setAttribute("download", `Riwayat_NPK_${activeFilter.replace(/\s+/g, "_")}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -204,12 +184,6 @@ export function AnalyticsScreen() {
     } else {
       setActiveFilter(filter);
     }
-  };
-
-  const handleApplyDateRange = () => {
-    console.log("Date range applied:", { startDate, endDate });
-    setActiveFilter(`Dari ${startDate} ke ${endDate}`);
-    setDateModalOpen(false);
   };
 
   const filteredActivityLog = activityLog.filter(item => {
@@ -238,7 +212,9 @@ export function AnalyticsScreen() {
           boxShadow: "var(--glow-card)",
         }}
       >
-        <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>Riwayat Data</span>
+        <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
+          Riwayat & Analitik NPK
+        </span>
       </div>
 
       <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -278,186 +254,187 @@ export function AnalyticsScreen() {
             boxShadow: "var(--glow-card)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Grafik Sensor</span>
-            <div style={{ display: "flex", gap: "12px" }}>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "5px", cursor: "pointer" }}
-                onClick={() => setShowSuhu(!showSuhu)}
-              >
-                <span
-                  style={{
-                    width: "10px",
-                    height: "3px",
-                    background: showSuhu ? "#F97316" : "var(--border-subtle)",
-                    borderRadius: "2px",
-                    display: "inline-block",
-                  }}
-                />
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 500 }}>Suhu</span>
-              </div>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "5px", cursor: "pointer" }}
-                onClick={() => setShowKelembaban(!showKelembaban)}
-              >
-                <span
-                  style={{
-                    width: "10px",
-                    height: "3px",
-                    background: showKelembaban ? "#3B82F6" : "var(--border-subtle)",
-                    borderRadius: "2px",
-                    display: "inline-block",
-                  }}
-                />
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 500 }}>Kelembaban</span>
-              </div>
-            </div>
-          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
+              Grafik Parameter
+            </span>
 
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={currentData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorSuhu" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#F97316" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorKelembaban" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--bg-hover)" vertical={false} />
-              <XAxis
-                dataKey="time"
-                tick={{ fontSize: 11, fill: "var(--icon-muted)", fontFamily: "'Inter', sans-serif" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: "var(--icon-muted)", fontFamily: "'Inter', sans-serif" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              {showSuhu && (
-                <Area
-                  type="monotone"
-                  dataKey="suhu"
-                  name="suhu"
-                  stroke="#F97316"
-                  strokeWidth={2.5}
-                  fill="url(#colorSuhu)"
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2 }}
-                />
-              )}
-              {showKelembaban && (
-                <Area
-                  type="monotone"
-                  dataKey="kelembaban"
-                  name="kelembaban"
-                  stroke="#3B82F6"
-                  strokeWidth={2.5}
-                  fill="url(#colorKelembaban)"
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2 }}
-                />
-              )}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Stats Row */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-          {[
-            { label: "Rata-rata Suhu", value: `${avgTemp}°C`, color: "#F97316" },
-            { label: "Rata-rata RH", value: `${avgRH}%`, color: "#3B82F6" },
-            { label: "Total Aktivasi", value: `${totalActivations}x`, color: "#22C55E" },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              style={{
-                background: "var(--bg-card)",
-                borderRadius: "12px",
-                padding: "12px 10px",
-                boxShadow: "0px 2px 6px rgba(0,0,0,0.04)",
-                textAlign: "center",
-              }}
-            >
-              <p style={{ fontSize: "18px", fontWeight: 800, color: stat.color, marginBottom: "2px" }}>{stat.value}</p>
-              <p style={{ fontSize: "10px", color: "var(--icon-muted)", fontWeight: 400, lineHeight: "1.3" }}>{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Activity Log */}
-        <div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
-            <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
-              Aktivitas Terakhir
-            </p>
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              {activityFilters.map((f) => (
+            {/* Mode switch pills */}
+            <div style={{ display: "flex", gap: "4px", background: "var(--bg-hover)", borderRadius: "10px", padding: "2px" }}>
+              {chartModes.map((m) => (
                 <button
-                  key={f}
-                  className="no-invert"
-                  onClick={() => setActiveActivityFilter(f)}
+                  key={m.id}
+                  onClick={() => setActiveChartMode(m.id as any)}
                   style={{
-                    padding: "4px 10px",
-                    borderRadius: "12px",
-                    border: `1.5px solid ${activeActivityFilter === f ? activityFilterColors[f].border : 'var(--border-subtle)'}`,
-                    background: activeActivityFilter === f ? activityFilterColors[f].bg : 'var(--bg-card)',
-                    color: activeActivityFilter === f ? activityFilterColors[f].text : 'var(--text-muted)',
+                    background: activeChartMode === m.id ? "var(--bg-card)" : "transparent",
+                    color: activeChartMode === m.id ? "#3B82F6" : "var(--text-muted)",
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "4px 8px",
                     fontSize: "11px",
-                    fontWeight: 600,
+                    fontWeight: activeChartMode === m.id ? 700 : 500,
                     cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    fontFamily: "'Inter', sans-serif",
-                    transition: "all 0.2s",
+                    boxShadow: activeChartMode === m.id ? "0px 2px 4px rgba(0,0,0,0.06)" : "none",
                   }}
                 >
-                  {f}
+                  {m.label}
                 </button>
               ))}
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {filteredActivityLog.map((item) => {
-              const Icon = item.icon;
+
+          <div style={{ width: "100%", height: 210 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={currentData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorMoisture" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorN" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorP" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#EA580C" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#EA580C" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorK" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorPH" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+
+                {activeChartMode === "moisture_temp" && (
+                  <>
+                    <Area type="monotone" dataKey="moisture" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMoisture)" />
+                    <Area type="monotone" dataKey="suhu" stroke="#F97316" strokeWidth={2.5} fillOpacity={1} fill="url(#colorTemp)" />
+                  </>
+                )}
+
+                {activeChartMode === "npk" && (
+                  <>
+                    <Area type="monotone" dataKey="n" stroke="#2563EB" strokeWidth={2.5} fillOpacity={1} fill="url(#colorN)" />
+                    <Area type="monotone" dataKey="p" stroke="#EA580C" strokeWidth={2.5} fillOpacity={1} fill="url(#colorP)" />
+                    <Area type="monotone" dataKey="k" stroke="#7C3AED" strokeWidth={2.5} fillOpacity={1} fill="url(#colorK)" />
+                  </>
+                )}
+
+                {activeChartMode === "ph_ec" && (
+                  <>
+                    <Area type="monotone" dataKey="ph" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorPH)" />
+                  </>
+                )}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Summary Metric Cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div
+            style={{
+              background: "var(--bg-card)",
+              borderRadius: "16px",
+              padding: "16px",
+              boxShadow: "var(--glow-card)",
+            }}
+          >
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Rata-rata Kelembaban</p>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+              <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{avgMoisture}</span>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>%</span>
+            </div>
+            <span style={{ fontSize: "11px", color: "#16A34A", fontWeight: 600 }}>Tercatat Stabil</span>
+          </div>
+
+          <div
+            style={{
+              background: "var(--bg-card)",
+              borderRadius: "16px",
+              padding: "16px",
+              boxShadow: "var(--glow-card)",
+            }}
+          >
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Rata-rata Suhu</p>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+              <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{avgTemp}</span>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>°C</span>
+            </div>
+            <span style={{ fontSize: "11px", color: "#16A34A", fontWeight: 600 }}>Zona Ideal Perakaran</span>
+          </div>
+        </div>
+
+        {/* Activity Log Section */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Log Kejadian Tanah</span>
+            <button
+              onClick={handleExportCSV}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                background: "var(--bg-hover)",
+                border: "none",
+                borderRadius: "8px",
+                padding: "6px 12px",
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "#3B82F6",
+                cursor: "pointer",
+              }}
+            >
+              <Download size={13} />
+              Ekspor CSV
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {filteredActivityLog.map((log) => {
+              const IconComp = log.icon;
               return (
                 <div
-                  key={item.id}
+                  key={log.id}
                   style={{
                     background: "var(--bg-card)",
                     borderRadius: "14px",
-                    padding: "14px",
-                    boxShadow: "0px 2px 8px rgba(0,0,0,0.04)",
+                    padding: "12px 14px",
+                    boxShadow: "var(--glow-card)",
                     display: "flex",
-                    gap: "12px",
                     alignItems: "flex-start",
+                    gap: "12px",
                   }}
                 >
                   <div
-                    className="no-invert"
                     style={{
-                      background: item.iconBg,
-                      borderRadius: "50%",
-                      width: "40px",
-                      height: "40px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      background: log.iconBg,
+                      borderRadius: "10px",
+                      padding: "8px",
+                      color: log.iconColor,
                       flexShrink: 0,
                     }}
                   >
-                    <Icon size={18} color={item.iconColor} strokeWidth={2} />
+                    <IconComp size={18} />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--icon-muted)", marginBottom: "3px" }}>
-                      {item.time}
-                    </p>
-                    <p style={{ fontSize: "13px", fontWeight: 400, color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                      {item.desc}
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)" }}>{log.time}</span>
+                    </div>
+                    <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, lineHeight: 1.4 }}>
+                      {log.desc}
                     </p>
                   </div>
                 </div>
@@ -468,150 +445,111 @@ export function AnalyticsScreen() {
       </div>
 
       {/* Date Range Modal */}
-      {isDateModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-        }}>
-          <div style={{
-            background: 'var(--bg-card)',
-            borderRadius: '16px',
-            padding: '24px',
-            width: 'calc(100% - 40px)',
-            maxWidth: '340px',
-            fontFamily: "'Inter', sans-serif",
-            boxShadow: "var(--glow-card)",
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>Pilih Rentang Tanggal</h3>
-              <button onClick={() => setDateModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                <X size={20} color="var(--text-muted)" />
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Tanggal Mulai</label>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1.5px solid var(--border-subtle)',
-                  background: 'var(--bg-input)',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
-                  fontFamily: "'Inter', sans-serif",
-                }}/>
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Tanggal Selesai</label>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1.5px solid var(--border-subtle)',
-                  background: 'var(--bg-input)',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
-                  fontFamily: "'Inter', sans-serif",
-                }}/>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-              <button onClick={() => setDateModalOpen(false)} style={{
-                flex: 1,
-                padding: '12px',
-                borderRadius: '12px',
-                border: '1.5px solid var(--border-subtle)',
-                background: 'var(--bg-card)',
-                color: 'var(--text-secondary)',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}>
-                Batal
-              </button>
-              <button onClick={handleApplyDateRange} style={{
-                flex: 1,
-                padding: '12px',
-                borderRadius: '12px',
-                border: 'none',
-                background: '#3B82F6',
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}>
-                Terapkan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Export Success Toast */}
       <AnimatePresence>
-        {exportSuccess && (
+        {isDateModalOpen && (
           <motion.div
-            className="no-invert"
-            initial={{ opacity: 0, y: 50, x: "-50%" }}
-            animate={{ opacity: 1, y: 0, x: "-50%" }}
-            exit={{ opacity: 0, y: 50, x: "-50%" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             style={{
               position: "fixed",
-              bottom: "160px",
-              left: "50%",
-              background: "#F0FDF4",
-              border: "1px solid #BBF7D0",
-              borderRadius: "12px",
-              padding: "12px 20px",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              zIndex: 999,
               display: "flex",
               alignItems: "center",
-              gap: "10px",
-              boxShadow: "0px 8px 24px rgba(34, 197, 94, 0.2)",
-              zIndex: 100,
-              width: "max-content",
+              justifyContent: "center",
+              padding: "20px",
             }}
           >
-            <CheckCircle2 size={20} color="#16A34A" />
-            <span style={{ fontSize: "13px", fontWeight: 700, color: "#15803D" }}>Berhasil mengunduh CSV!</span>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "20px",
+                padding: "24px",
+                width: "100%",
+                maxWidth: "360px",
+                boxShadow: "0px 10px 30px rgba(0,0,0,0.2)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Pilih Rentang Tanggal</span>
+                <button
+                  onClick={() => setDateModalOpen(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                    Tanggal Mulai
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "10px",
+                      border: "1px solid var(--border-subtle)",
+                      background: "var(--bg-input)",
+                      color: "var(--text-primary)",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>
+                    Tanggal Akhir
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "10px",
+                      border: "1px solid var(--border-subtle)",
+                      background: "var(--bg-input)",
+                      color: "var(--text-primary)",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (startDate && endDate) {
+                    setActiveFilter(`${startDate} - ${endDate}`);
+                  }
+                  setDateModalOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: "#3B82F6",
+                  color: "white",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Terapkan Filter
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* FAB - Download */}
-      <motion.button
-        className="no-invert"
-        whileTap={{ scale: 0.9 }}
-        onClick={handleExportCSV}
-        style={{
-          position: "fixed",
-          bottom: "90px",
-          right: "20px",
-          width: "52px",
-          height: "52px",
-          borderRadius: "16px",
-          background: "#3B82F6",
-          border: "none",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0px 6px 16px rgba(59,130,246,0.45)",
-          zIndex: 50,
-        }}
-      >
-        <Download size={22} color="white" strokeWidth={2} />
-      </motion.button>
 
       <BottomNav />
     </div>

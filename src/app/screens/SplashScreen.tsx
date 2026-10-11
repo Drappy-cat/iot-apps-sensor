@@ -278,7 +278,7 @@ export function SplashScreen() {
                     letterSpacing: "0.2px",
                   }}
                 >
-                  Sistem Otomasi Cerdas · Fuzzy Logic
+                  Sistem Otomasi Cerdas · NPK 7-in-1 IoT
                 </span>
               </div>
             </motion.div>

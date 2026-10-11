@@ -1,5 +1,5 @@
 {
-  "appId": "com.greenhouse.magetan",
-  "appName": "Greenhouse",
+  "appId": "com.iotapps.sensor",
+  "appName": "IoT Sensor NPK",
   "webDir": "dist"
 }

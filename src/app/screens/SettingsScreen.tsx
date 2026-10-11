@@ -1,52 +1,123 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useThemeTransition } from "../hooks/useThemeTransition";
-import { User, Moon, Cpu, Thermometer, Droplets, LogOut, ChevronRight, Wifi, Shield } from "lucide-react";
+import {
+  User,
+  Moon,
+  Cpu,
+  Thermometer,
+  Droplets,
+  LogOut,
+  ChevronRight,
+  Wifi,
+  Shield,
+  Database,
+  Activity,
+  Zap,
+  Layers,
+  Sparkles,
+  FlaskConical,
+  CheckCircle2,
+  RefreshCw,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
 import PuteraPic from "../../Picture/FotoProfile/Putera.png";
 import RizmaPic from "../../Picture/FotoProfile/Rizmaindra.png";
 import { getActiveUser, logoutUser } from "../utils/authHelper";
+import {
+  getSavedFirebaseConfig,
+  saveFirebaseConfig,
+  STORAGE_KEY_SIM_ENABLED,
+  INITIAL_SENSOR_DATA,
+} from "../services/firebaseService";
 
 export function SettingsScreen() {
   const navigate = useNavigate();
   const activeUser = getActiveUser();
   const { theme, toggleTheme } = useThemeTransition();
   const darkMode = theme === "dark";
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Firebase Config State
+  const [fbConfig, setFbConfig] = useState(getSavedFirebaseConfig);
+  const [fbSaved, setFbSaved] = useState(false);
+
+  // Simulation mode
   const [simEnabled, setSimEnabled] = useState(() => {
-    const saved = localStorage.getItem("gh_settings_sim_enabled");
+    const saved = localStorage.getItem(STORAGE_KEY_SIM_ENABLED);
     return saved !== null ? saved === "true" : true;
   });
-  const [simTemp, setSimTemp] = useState(() => {
-    const saved = localStorage.getItem("gh_settings_sim_temp");
-    return saved ? parseInt(saved, 10) : 28;
-  });
-  const [simHumidity, setSimHumidity] = useState(() => {
-    const saved = localStorage.getItem("gh_settings_sim_humidity");
-    return saved ? parseInt(saved, 10) : 65;
-  });
 
-  useEffect(() => { localStorage.setItem("gh_settings_sim_enabled", simEnabled.toString()); }, [simEnabled]);
-  useEffect(() => { localStorage.setItem("gh_settings_sim_temp", simTemp.toString()); }, [simTemp]);
-  useEffect(() => { localStorage.setItem("gh_settings_sim_humidity", simHumidity.toString()); }, [simHumidity]);
+  // NPK 7-in-1 Simulation parameters
+  const [simMoisture, setSimMoisture] = useState(65);
+  const [simTemp, setSimTemp] = useState(27);
+  const [simPH, setSimPH] = useState(6.7);
+  const [simEC, setSimEC] = useState(1350);
+  const [simN, setSimN] = useState(48);
+  const [simP, setSimP] = useState(35);
+  const [simK, setSimK] = useState(115);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SIM_ENABLED, simEnabled.toString());
+  }, [simEnabled]);
+
+  useEffect(() => {
+    const dataToSave = {
+      moisture: simMoisture,
+      temperature: simTemp,
+      ph: simPH,
+      ec: simEC,
+      nitrogen: simN,
+      phosphorus: simP,
+      potassium: simK,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem("iot_sim_base_data", JSON.stringify(dataToSave));
+  }, [simMoisture, simTemp, simPH, simEC, simN, simP, simK]);
+
+  const handleSaveFirebase = () => {
+    saveFirebaseConfig(fbConfig);
+    setFbSaved(true);
+    setToastMessage("Konfigurasi Firebase berhasil disimpan!");
+    setTimeout(() => setFbSaved(false), 3000);
+  };
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   const handleLogout = () => {
     logoutUser();
     navigate("/login");
   };
 
-  const Toggle = ({ value, onChange }: { value: boolean; onChange: (e: React.MouseEvent) => void; }) => (
+  const Toggle = ({
+    value,
+    onChange,
+  }: {
+    value: boolean;
+    onChange: (e: React.MouseEvent) => void;
+  }) => (
     <motion.div
       onClick={(e) => onChange(e as any)}
       animate={{
         background: value ? "#22C55E" : "var(--border-strong)",
-        boxShadow: value ? "0px 2px 8px rgba(34,197,94,0.35)" : "none"
+        boxShadow: value ? "0px 2px 8px rgba(34,197,94,0.35)" : "none",
       }}
       initial={false}
       transition={{ duration: 0.2 }}
       style={{
-        width: "48px", height: "28px", borderRadius: "14px", cursor: "pointer",
-        position: "relative", flexShrink: 0,
+        width: "48px",
+        height: "28px",
+        borderRadius: "14px",
+        cursor: "pointer",
+        position: "relative",
+        flexShrink: 0,
       }}
     >
       <motion.div
@@ -54,8 +125,14 @@ export function SettingsScreen() {
         initial={false}
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
         style={{
-          position: "absolute", top: "3px", left: "3px", width: "22px", height: "22px",
-          borderRadius: "50%", background: "white", boxShadow: "0px 2px 4px rgba(0,0,0,0.2)",
+          position: "absolute",
+          top: "3px",
+          left: "3px",
+          width: "22px",
+          height: "22px",
+          borderRadius: "50%",
+          background: "white",
+          boxShadow: "0px 2px 4px rgba(0,0,0,0.2)",
         }}
       />
     </motion.div>
@@ -78,15 +155,17 @@ export function SettingsScreen() {
           boxShadow: "var(--glow-card)",
         }}
       >
-        <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>Profil & Pengaturan</span>
+        <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
+          Profil & Pengaturan
+        </span>
       </div>
 
       <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: "16px" }}>
         {/* Profile Header */}
         <motion.div
           whileHover={{
-            scale: 1.05,
-            boxShadow: "0px 12px 36px rgba(59, 130, 246, 0.8)",
+            scale: 1.02,
+            boxShadow: "0px 12px 36px rgba(59, 130, 246, 0.4)",
           }}
           transition={{
             type: "spring",
@@ -117,9 +196,17 @@ export function SettingsScreen() {
                 alignItems: "center",
                 justifyContent: "center",
                 border: "3px solid rgba(255,255,255,0.4)",
+                overflow: "hidden",
               }}
             >
-              <User size={36} color="white" strokeWidth={1.5} />
+              <img
+                src={RizmaPic}
+                alt="Profile"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={(e) => {
+                  (e.target as any).style.display = "none";
+                }}
+              />
             </div>
             {/* Online Dot */}
             <div
@@ -139,7 +226,9 @@ export function SettingsScreen() {
             <p style={{ fontSize: "18px", fontWeight: 700, color: "white", marginBottom: "3px" }}>
               {activeUser.namaLengkap}
             </p>
-            <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)" }}>ID: {activeUser.idOperator}</p>
+            <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)" }}>
+              ID: {activeUser.idOperator}
+            </p>
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <span
@@ -183,7 +272,16 @@ export function SettingsScreen() {
 
         {/* Preferensi Group */}
         <div>
-          <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--icon-muted)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "var(--icon-muted)",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+            }}
+          >
             Preferensi
           </p>
           <div
@@ -219,8 +317,12 @@ export function SettingsScreen() {
                   <Moon size={18} color="#6366F1" strokeWidth={2} />
                 </div>
                 <div>
-                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Mode Gelap</p>
-                  <p style={{ fontSize: "12px", color: "var(--icon-muted)" }}>Tampilan gelap untuk mata</p>
+                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                    Mode Gelap
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--icon-muted)" }}>
+                    Tampilan gelap untuk mata
+                  </p>
                 </div>
               </div>
               <Toggle value={darkMode} onChange={(e) => toggleTheme(e)} />
@@ -228,11 +330,13 @@ export function SettingsScreen() {
 
             {/* Notifications */}
             <div
+              onClick={() => navigate("/notifications")}
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "16px 18px",
+                cursor: "pointer",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -250,8 +354,12 @@ export function SettingsScreen() {
                   <span style={{ fontSize: "16px" }}>🔔</span>
                 </div>
                 <div>
-                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Notifikasi Peringatan</p>
-                  <p style={{ fontSize: "12px", color: "var(--icon-muted)" }}>Alert kondisi kritis</p>
+                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                    Notifikasi Peringatan
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--icon-muted)" }}>
+                    Alert ambang batas sensor
+                  </p>
                 </div>
               </div>
               <ChevronRight size={16} color="var(--border-strong)" />
@@ -259,9 +367,158 @@ export function SettingsScreen() {
           </div>
         </div>
 
+        {/* Konfigurasi Firebase Realtime Database */}
+        <div>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "var(--icon-muted)",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+            }}
+          >
+            Integrasi Cloud Firebase
+          </p>
+          <div
+            style={{
+              background: "var(--bg-card)",
+              borderRadius: "16px",
+              padding: "18px",
+              boxShadow: "0px 2px 8px rgba(0,0,0,0.04)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div
+                style={{
+                  background: "#FFFBEB",
+                  borderRadius: "10px",
+                  padding: "8px",
+                  color: "#D97706",
+                }}
+              >
+                <Database size={20} />
+              </div>
+              <div>
+                <p style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                  Firebase Realtime Database
+                </p>
+                <p style={{ fontSize: "12px", color: "var(--icon-muted)", margin: 0 }}>
+                  Sambungkan ke database IoT Anda
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+                Database URL
+              </label>
+              <input
+                type="text"
+                placeholder="https://proyek-anda-default-rtdb.firebaseio.com"
+                value={fbConfig.databaseURL}
+                onChange={(e) => setFbConfig({ ...fbConfig, databaseURL: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border-subtle)",
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  fontFamily: "'Inter', sans-serif",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+                API Key
+              </label>
+              <input
+                type="password"
+                placeholder="AIzaSy..."
+                value={fbConfig.apiKey}
+                onChange={(e) => setFbConfig({ ...fbConfig, apiKey: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border-subtle)",
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  fontFamily: "'Inter', sans-serif",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+                Path Node Sensor
+              </label>
+              <input
+                type="text"
+                placeholder="sensor_npk"
+                value={fbConfig.sensorPath}
+                onChange={(e) => setFbConfig({ ...fbConfig, sensorPath: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--border-subtle)",
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  fontFamily: "'Inter', sans-serif",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <button
+              onClick={handleSaveFirebase}
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: "12px",
+                background: fbSaved ? "#22C55E" : "#3B82F6",
+                border: "none",
+                color: "white",
+                fontSize: "13.5px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                transition: "background 0.3s",
+              }}
+            >
+              {fbSaved ? <CheckCircle2 size={16} /> : <RefreshCw size={16} />}
+              {fbSaved ? "Tersimpan!" : "Simpan & Hubungkan"}
+            </button>
+          </div>
+        </div>
+
         {/* Developer Mode Group */}
         <div>
-          <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--icon-muted)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "var(--icon-muted)",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+            }}
+          >
             Mode Pengembang
           </p>
           <div
@@ -276,7 +533,16 @@ export function SettingsScreen() {
             }}
           >
             {activeUser.role !== "admin" ? (
-              <div style={{ padding: "16px 8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{
+                  padding: "16px 8px",
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
                 <span style={{ fontSize: "32px" }}>🔒</span>
                 <p style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-heading)", margin: "0 0 2px" }}>
                   Mode Pengembang Terkunci
@@ -305,8 +571,12 @@ export function SettingsScreen() {
                       <Cpu size={18} color={simEnabled ? "#3B82F6" : "var(--icon-muted)"} strokeWidth={2} />
                     </div>
                     <div>
-                      <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>Aktifkan Simulasi Sensor</p>
-                      <p style={{ fontSize: "12px", color: "var(--icon-muted)" }}>Override data sensor nyata</p>
+                      <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        Aktifkan Simulasi Sensor
+                      </p>
+                      <p style={{ fontSize: "12px", color: "var(--icon-muted)" }}>
+                        Gunakan data uji virtual (Offline/Demo)
+                      </p>
                     </div>
                   </div>
                   <Toggle value={simEnabled} onChange={() => setSimEnabled(!simEnabled)} />
@@ -321,94 +591,87 @@ export function SettingsScreen() {
                       transition={{ duration: 0.3, ease: "easeInOut" }}
                       style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: "16px" }}
                     >
-                      <div
-                        style={{
-                          height: "1px",
-                          background: "var(--bg-hover)",
-                          margin: "0 -4px",
-                        }}
-                      />
+                      <div style={{ height: "1px", background: "var(--bg-hover)", margin: "0 -4px" }} />
 
-                      {/* Temperature Slider */}
+                      {/* Kelembaban Tanah */}
                       <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <Thermometer size={16} color="#F97316" strokeWidth={2} />
-                            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                              Manipulasi Suhu
-                            </span>
-                          </div>
-                          <span
-                            style={{
-                              background: "#FFF7ED",
-                              color: "#F97316",
-                              borderRadius: "8px",
-                              padding: "3px 10px",
-                              fontSize: "13px",
-                              fontWeight: 700,
-                            }}
-                          >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                            Kelembaban Tanah
+                          </span>
+                          <span style={{ background: "var(--bg-primary-light)", color: "#3B82F6", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
+                            {simMoisture}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={10}
+                          max={100}
+                          value={simMoisture}
+                          onChange={(e) => setSimMoisture(Number(e.target.value))}
+                          style={{ width: "100%", accentColor: "#3B82F6", height: "6px", cursor: "pointer" }}
+                        />
+                      </div>
+
+                      {/* Suhu Tanah */}
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                            Suhu Tanah
+                          </span>
+                          <span style={{ background: "#FFF7ED", color: "#F97316", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
                             {simTemp}°C
                           </span>
                         </div>
                         <input
                           type="range"
-                          min={0}
-                          max={50}
+                          min={15}
+                          max={45}
                           value={simTemp}
                           onChange={(e) => setSimTemp(Number(e.target.value))}
-                          style={{
-                            width: "100%",
-                            accentColor: "#F97316",
-                            height: "6px",
-                            cursor: "pointer",
-                          }}
+                          style={{ width: "100%", accentColor: "#F97316", height: "6px", cursor: "pointer" }}
                         />
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-                          <span style={{ fontSize: "11px", color: "var(--border-strong)" }}>0°C</span>
-                          <span style={{ fontSize: "11px", color: "var(--border-strong)" }}>50°C</span>
-                        </div>
                       </div>
 
-                      {/* Humidity Slider */}
+                      {/* pH Tanah */}
                       <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <Droplets size={16} color="#3B82F6" strokeWidth={2} />
-                            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                              Manipulasi Kelembaban
-                            </span>
-                          </div>
-                          <span
-                            style={{
-                              background: "var(--bg-primary-light)",
-                              color: "#3B82F6",
-                              borderRadius: "8px",
-                              padding: "3px 10px",
-                              fontSize: "13px",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {simHumidity}%
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                            pH Tanah
+                          </span>
+                          <span style={{ background: "#ECFDF5", color: "#059669", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
+                            {simPH}
                           </span>
                         </div>
                         <input
                           type="range"
-                          min={0}
-                          max={100}
-                          value={simHumidity}
-                          onChange={(e) => setSimHumidity(Number(e.target.value))}
-                          style={{
-                            width: "100%",
-                            accentColor: "#3B82F6",
-                            height: "6px",
-                            cursor: "pointer",
-                          }}
+                          min={4.0}
+                          max={9.0}
+                          step={0.1}
+                          value={simPH}
+                          onChange={(e) => setSimPH(Number(e.target.value))}
+                          style={{ width: "100%", accentColor: "#059669", height: "6px", cursor: "pointer" }}
                         />
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-                          <span style={{ fontSize: "11px", color: "var(--border-strong)" }}>0%</span>
-                          <span style={{ fontSize: "11px", color: "var(--border-strong)" }}>100%</span>
+                      </div>
+
+                      {/* Nitrogen N */}
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                            Nitrogen (N)
+                          </span>
+                          <span style={{ background: "#EFF6FF", color: "#2563EB", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
+                            {simN} mg/kg
+                          </span>
                         </div>
+                        <input
+                          type="range"
+                          min={5}
+                          max={150}
+                          value={simN}
+                          onChange={(e) => setSimN(Number(e.target.value))}
+                          style={{ width: "100%", accentColor: "#2563EB", height: "6px", cursor: "pointer" }}
+                        />
                       </div>
 
                       {/* Preview Box */}
@@ -423,19 +686,19 @@ export function SettingsScreen() {
                         }}
                       >
                         <div style={{ textAlign: "center" }}>
-                          <p style={{ fontSize: "10px", color: "var(--icon-muted)", marginBottom: "2px" }}>Suhu Sim.</p>
-                          <p style={{ fontSize: "18px", fontWeight: 800, color: "#F97316" }}>{simTemp}°C</p>
+                          <p style={{ fontSize: "10px", color: "var(--icon-muted)", marginBottom: "2px" }}>Kelembaban</p>
+                          <p style={{ fontSize: "16px", fontWeight: 800, color: "#3B82F6" }}>{simMoisture}%</p>
                         </div>
                         <div style={{ width: "1px", background: "var(--border-subtle)" }} />
                         <div style={{ textAlign: "center" }}>
-                          <p style={{ fontSize: "10px", color: "var(--icon-muted)", marginBottom: "2px" }}>RH Sim.</p>
-                          <p style={{ fontSize: "18px", fontWeight: 800, color: "#3B82F6" }}>{simHumidity}%</p>
+                          <p style={{ fontSize: "10px", color: "var(--icon-muted)", marginBottom: "2px" }}>pH</p>
+                          <p style={{ fontSize: "16px", fontWeight: 800, color: "#059669" }}>{simPH}</p>
                         </div>
                         <div style={{ width: "1px", background: "var(--border-subtle)" }} />
                         <div style={{ textAlign: "center" }}>
-                          <p style={{ fontSize: "10px", color: "var(--icon-muted)", marginBottom: "2px" }}>Kipas</p>
-                          <p style={{ fontSize: "13px", fontWeight: 800, color: simTemp > 25 ? "#22C55E" : "var(--text-muted)" }}>
-                            {simTemp > 25 ? "ON" : "OFF"}
+                          <p style={{ fontSize: "10px", color: "var(--icon-muted)", marginBottom: "2px" }}>Irigasi</p>
+                          <p style={{ fontSize: "13px", fontWeight: 800, color: simMoisture < 60 ? "#22C55E" : "var(--text-muted)" }}>
+                            {simMoisture < 60 ? "ON" : "OFF"}
                           </p>
                         </div>
                       </div>
@@ -449,7 +712,16 @@ export function SettingsScreen() {
 
         {/* Tim Pengembang Group */}
         <div>
-          <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--icon-muted)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "var(--icon-muted)",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+            }}
+          >
             Tim Pengembang
           </p>
           <div
@@ -468,20 +740,20 @@ export function SettingsScreen() {
                 name: "Rizma Indra Pramuda",
                 id: "25051204370",
                 role: "Fullstack Developer",
-                pic: RizmaPic
+                pic: RizmaPic,
               },
               {
                 name: "Putera Al Khalidi",
                 id: "25051204362",
                 role: "Front End Developer",
-                pic: PuteraPic
+                pic: PuteraPic,
               },
               {
                 name: "Leony Andika Triwicaksono",
                 id: "25051204324",
                 role: "Penulis",
-                pic: null
-              }
+                pic: null,
+              },
             ].map((dev, idx) => (
               <div key={idx} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <div
@@ -495,18 +767,34 @@ export function SettingsScreen() {
                     justifyContent: "center",
                     overflow: "hidden",
                     border: "2px solid var(--border-subtle)",
-                    flexShrink: 0
+                    flexShrink: 0,
                   }}
                 >
                   {dev.pic ? (
-                    <img src={dev.pic} alt={dev.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img
+                      src={dev.pic}
+                      alt={dev.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
                   ) : (
                     <User size={24} color="var(--icon-muted)" />
                   )}
                 </div>
                 <div>
-                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", lineHeight: "1.2", marginBottom: "4px" }}>{dev.name}</p>
-                  <p style={{ fontSize: "12px", color: "var(--icon-muted)", marginBottom: "4px" }}>{dev.id}</p>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      color: "var(--text-primary)",
+                      lineHeight: "1.2",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    {dev.name}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--icon-muted)", marginBottom: "4px" }}>
+                    {dev.id}
+                  </p>
                   <span
                     style={{
                       background: "var(--bg-primary-light)",
@@ -515,7 +803,7 @@ export function SettingsScreen() {
                       fontWeight: 700,
                       padding: "2px 8px",
                       borderRadius: "6px",
-                      display: "inline-block"
+                      display: "inline-block",
                     }}
                   >
                     {dev.role}
@@ -549,7 +837,7 @@ export function SettingsScreen() {
               color: "var(--text-secondary)",
             }}
           >
-            v1.2.0 Beta
+            v1.0.0 IoT NPK 7-in-1
           </span>
         </div>
 

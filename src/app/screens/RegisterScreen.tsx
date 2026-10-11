@@ -14,7 +14,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-import { registerUser, type User } from "../utils/authHelper";
+import { registerUser, type User as AuthUser } from "../utils/authHelper";
 
 interface FormData {
   namaLengkap: string;
@@ -109,7 +109,7 @@ export function RegisterScreen() {
     setSubmitted(true);
     if (!validate()) return;
 
-    const newUser: User = {
+    const newUser: AuthUser = {
       namaLengkap: form.namaLengkap.trim(),
       idOperator: form.idOperator.trim().toLowerCase(),
       email: form.email.trim(),

@@ -1,67 +1,43 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Bell, Wind, Flame, ThermometerSun, Droplets, CloudSun, Sun, CloudRain, CloudLightning } from "lucide-react";
+import {
+  Bell,
+  Droplets,
+  Thermometer,
+  Sprout,
+  Activity,
+  Zap,
+  Layers,
+  FlaskConical,
+  Wifi,
+  Sparkles,
+  Waves,
+  RefreshCw,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
 import { getActiveUser } from "../utils/authHelper";
+import { useSensorData } from "../hooks/useSensorData";
 
 export function DashboardScreen() {
   const navigate = useNavigate();
   const activeUser = getActiveUser();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const [setpoint, setSetpoint] = useState(() => {
-    const saved = localStorage.getItem("gh_setpoint");
-    return saved ? parseInt(saved, 10) : 25;
-  });
+  const {
+    sensorData,
+    analysis,
+    connectionStatus,
+    setpoint,
+    setSetpoint,
+    irrigationOn,
+    fertilizerOn,
+    toggleIrrigation,
+    toggleFertilizer,
+  } = useSensorData();
 
-  useEffect(() => {
-    localStorage.setItem("gh_setpoint", setpoint.toString());
-  }, [setpoint]);
-  const [currentTemp, setCurrentTemp] = useState(28);
-  const [currentHumidity, setCurrentHumidity] = useState(65);
-  const [weather, setWeather] = useState<"sunny" | "cloudy" | "rainy" | "stormy">("cloudy");
-
-  const diff = currentTemp - setpoint;
-  let tempStatus = "NORMAL";
-  let fanOn = false;
-  let heaterOn = false;
-  let ruleActive = "Rule #1 Aktif";
-
-  if (diff >= 1) {
-    tempStatus = "PANAS";
-    fanOn = true;
-    heaterOn = false;
-    ruleActive = "Rule #3 Aktif";
-  } else if (diff <= -1) {
-    tempStatus = "DINGIN";
-    fanOn = false;
-    heaterOn = true;
-    ruleActive = "Rule #2 Aktif";
-  }
-
-  const confidence = Math.min(98, Math.max(70, Math.abs(diff) * 8 + 75)).toFixed(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTemp((prev) => {
-        if (fanOn) return Math.max(prev - 0.5, 20);
-        if (heaterOn) return Math.min(prev + 0.5, 45);
-        return prev + (Math.random() - 0.5) * 0.4;
-      });
-      setCurrentHumidity((prev) => 
-        Math.min(100, Math.max(40, prev + ((Math.random() - 0.5) * 2)))
-      );
-      if (Math.random() > 0.85) {
-        const weathers: ("sunny" | "cloudy" | "rainy" | "stormy")[] = ["sunny", "cloudy", "rainy", "stormy"];
-        setWeather(weathers[Math.floor(Math.random() * weathers.length)]);
-      }
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [fanOn, heaterOn]);
-
-  const decrement = () => setSetpoint((p) => Math.max(0, p - 1));
-  const increment = () => setSetpoint((p) => Math.min(50, p + 1));
+  const decrement = () => setSetpoint((p) => Math.max(20, p - 5));
+  const increment = () => setSetpoint((p) => Math.min(95, p + 5));
 
   const handleBlockedAction = () => {
     setToastMessage("Akses Ditolak: Peran Viewer hanya dapat memantau data.");
@@ -73,6 +49,14 @@ export function DashboardScreen() {
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
+
+  // Format today's date in Indonesian
+  const todayStr = new Intl.DateTimeFormat("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date());
 
   return (
     <div
@@ -94,8 +78,10 @@ export function DashboardScreen() {
           boxShadow: "var(--glow-card)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>Beranda</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
+            Beranda
+          </span>
           {activeUser.role !== "admin" && (
             <span
               style={{
@@ -111,7 +97,55 @@ export function DashboardScreen() {
               Mode {activeUser.role}
             </span>
           )}
+
+          {/* Connection status pill */}
+          <span
+            onClick={() => navigate("/settings")}
+            title="Klik untuk konfigurasi Firebase"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "2px 8px",
+              borderRadius: "12px",
+              fontSize: "10.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              background:
+                connectionStatus === "live"
+                  ? "rgba(34, 197, 94, 0.15)"
+                  : connectionStatus === "demo"
+                  ? "rgba(245, 158, 11, 0.15)"
+                  : "rgba(239, 68, 68, 0.15)",
+              color:
+                connectionStatus === "live"
+                  ? "#16A34A"
+                  : connectionStatus === "demo"
+                  ? "#D97706"
+                  : "#DC2626",
+            }}
+          >
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                background:
+                  connectionStatus === "live"
+                    ? "#22C55E"
+                    : connectionStatus === "demo"
+                    ? "#F59E0B"
+                    : "#EF4444",
+              }}
+            />
+            {connectionStatus === "live"
+              ? "Firebase Live"
+              : connectionStatus === "demo"
+              ? "Mode Demo"
+              : "Offline"}
+          </span>
         </div>
+
         <button
           onClick={() => navigate("/notifications")}
           style={{
@@ -144,7 +178,7 @@ export function DashboardScreen() {
       </div>
 
       <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: "14px" }}>
-        {/* Hero Card - Climate */}
+        {/* Hero Card - Real-time Soil Moisture & Condition */}
         <div
           className="no-invert"
           style={{
@@ -183,20 +217,24 @@ export function DashboardScreen() {
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <p style={{ fontSize: "13px", fontWeight: 400, opacity: 0.8, marginBottom: "4px" }}>Suhu Real-time</p>
+              <p style={{ fontSize: "13px", fontWeight: 400, opacity: 0.85, marginBottom: "4px" }}>
+                Kelembaban Tanah (Real-time)
+              </p>
               <div style={{ display: "flex", alignItems: "flex-start", gap: "4px" }}>
                 <span style={{ fontSize: "64px", fontWeight: 800, lineHeight: 1, letterSpacing: "-2px" }}>
-                  {currentTemp.toFixed(1)}
+                  {sensorData.moisture.toFixed(1)}
                 </span>
-                <span style={{ fontSize: "28px", fontWeight: 600, marginTop: "10px", opacity: 0.9 }}>°C</span>
+                <span style={{ fontSize: "28px", fontWeight: 600, marginTop: "10px", opacity: 0.9 }}>%</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
-                <Droplets size={15} style={{ opacity: 0.8 }} />
-                <span style={{ fontSize: "14px", fontWeight: 500, opacity: 0.85 }}>Kelembaban {currentHumidity.toFixed(1)}%</span>
+                <Thermometer size={15} style={{ opacity: 0.85 }} />
+                <span style={{ fontSize: "14px", fontWeight: 500, opacity: 0.9 }}>
+                  Suhu Tanah {sensorData.temperature.toFixed(1)}°C
+                </span>
               </div>
             </div>
 
-            {/* Weather Icon */}
+            {/* Soil / Plant Health Animated Icon */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", marginTop: "4px" }}>
               <div
                 style={{
@@ -208,16 +246,21 @@ export function DashboardScreen() {
               >
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={weather}
-                    initial={{ opacity: 0, scale: 0.5, rotate: -30 }}
+                    key={analysis.moistureStatus}
+                    initial={{ opacity: 0, scale: 0.5, rotate: -20 }}
                     animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                    exit={{ opacity: 0, scale: 0.5, rotate: 30 }}
+                    exit={{ opacity: 0, scale: 0.5, rotate: 20 }}
                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   >
-                    {weather === "sunny" && <Sun size={40} color="white" strokeWidth={1.5} />}
-                    {weather === "cloudy" && <CloudSun size={40} color="white" strokeWidth={1.5} />}
-                    {weather === "rainy" && <CloudRain size={40} color="white" strokeWidth={1.5} />}
-                    {weather === "stormy" && <CloudLightning size={40} color="white" strokeWidth={1.5} />}
+                    {analysis.moistureStatus === "OPTIMAL" && (
+                      <Sprout size={40} color="white" strokeWidth={1.8} />
+                    )}
+                    {analysis.moistureStatus === "KERING" && (
+                      <Droplets size={40} color="#FDE047" strokeWidth={1.8} />
+                    )}
+                    {analysis.moistureStatus === "BASAH" && (
+                      <Waves size={40} color="#BAE6FD" strokeWidth={1.8} />
+                    )}
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -234,29 +277,29 @@ export function DashboardScreen() {
                   padding: "4px 10px",
                   fontSize: "12px",
                   fontWeight: 400,
-                  opacity: 0.8,
+                  opacity: 0.85,
                 }}
               >
-                Senin, 13 Apr 2026
+                {todayStr}
               </span>
             </div>
             <span
               style={{
-                background: "#22C55E",
+                background: analysis.fertilityScore >= 75 ? "#22C55E" : "#F97316",
                 color: "white",
                 borderRadius: "20px",
                 padding: "5px 14px",
                 fontSize: "12px",
                 fontWeight: 700,
-                boxShadow: "var(--glow-success)",
+                boxShadow: analysis.fertilityScore >= 75 ? "var(--glow-success)" : "var(--glow-warning)",
               }}
             >
-              ✓ Kondisi Stabil
+              {analysis.fertilityScore >= 75 ? "✓ Kondisi Stabil" : "⚠ Perlu Perhatian"}
             </span>
           </div>
         </div>
 
-        {/* Fuzzy Logic Card */}
+        {/* AI Soil Intelligence Card (Replaces Fuzzy Logic) */}
         <div
           style={{
             background: "var(--bg-ai-card)",
@@ -281,19 +324,21 @@ export function DashboardScreen() {
             >
               <span style={{ color: "white", fontSize: "13px", fontWeight: 800 }}>AI</span>
             </div>
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-ai-title)" }}>Transparansi Fuzzy Logic</span>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-ai-title)" }}>
+              Transparansi AI Kesuburan Tanah
+            </span>
           </div>
-          <p style={{ fontSize: "13.5px", fontWeight: 400, color: "var(--text-ai-desc)", lineHeight: "1.55", transition: "all 0.3s" }}>
-            Sensor membaca suhu{" "}
+          <p style={{ fontSize: "13.5px", fontWeight: 400, color: "var(--text-ai-desc)", lineHeight: "1.55" }}>
+            Sensor membaca kelembaban{" "}
             <span style={{ fontWeight: 700, background: "var(--bg-ai-badge)", borderRadius: "4px", padding: "1px 5px" }}>
-              {tempStatus}
+              {analysis.moistureStatus}
             </span>{" "}
-            dan kelembaban{" "}
+            dan pH tanah{" "}
             <span style={{ fontWeight: 700, background: "var(--bg-ai-badge)", borderRadius: "4px", padding: "1px 5px" }}>
-              NORMAL
+              {analysis.phStatus} ({sensorData.ph.toFixed(1)})
             </span>.
             <br />
-            Keputusan inferensi: <strong>Kipas {fanOn ? "ON" : "OFF"}</strong>, <strong>Pemanas {heaterOn ? "ON" : "OFF"}</strong>.
+            Keputusan inferensi: <strong>Irigasi {irrigationOn ? "ON" : "OFF"}</strong>, <strong>Dosis Nutrisi {fertilizerOn ? "ON" : "OFF"}</strong>.
           </p>
           <div
             style={{
@@ -313,7 +358,7 @@ export function DashboardScreen() {
                 fontWeight: 600,
               }}
             >
-              {ruleActive}
+              {analysis.ruleActive}
             </span>
             <span
               style={{
@@ -325,7 +370,19 @@ export function DashboardScreen() {
                 fontWeight: 600,
               }}
             >
-              Confidence: {confidence}%
+              Skor Kesuburan: {analysis.fertilityScore}%
+            </span>
+            <span
+              style={{
+                background: "var(--bg-ai-pill)",
+                color: "var(--text-ai-desc)",
+                borderRadius: "6px",
+                padding: "3px 10px",
+                fontSize: "11px",
+                fontWeight: 600,
+              }}
+            >
+              Confidence: {analysis.confidence}%
             </span>
           </div>
         </div>
@@ -340,8 +397,10 @@ export function DashboardScreen() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-            <ThermometerSun size={18} color="#3B82F6" strokeWidth={2} />
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Atur Target Suhu</span>
+            <Droplets size={18} color="#3B82F6" strokeWidth={2} />
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
+              Atur Target Kelembaban Tanah
+            </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <motion.button
@@ -389,9 +448,13 @@ export function DashboardScreen() {
                     </motion.div>
                   </AnimatePresence>
                 </div>
-                <span style={{ fontSize: "22px", fontWeight: 600, color: "var(--text-muted)", marginTop: "2px" }}>°C</span>
+                <span style={{ fontSize: "22px", fontWeight: 600, color: "var(--text-muted)", marginTop: "2px" }}>
+                  %
+                </span>
               </div>
-              <p style={{ fontSize: "12px", color: "var(--icon-muted)", marginTop: "4px" }}>Target Setpoint</p>
+              <p style={{ fontSize: "12px", color: "var(--icon-muted)", marginTop: "4px" }}>
+                Target Ambang Irigasi
+              </p>
             </div>
             <motion.button
               whileTap={activeUser.role !== "viewer" ? { scale: 0.85 } : {}}
@@ -418,62 +481,287 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* Actuators Grid */}
+        {/* 7-in-1 Sensor Parameters Grid */}
         <div>
-          <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "10px" }}>Status Aktuator</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            {/* Fan Card */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+            <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+              Parameter Sensor NPK 7-in-1
+            </p>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--icon-muted)" }}>
+              Data Modbus RS485
+            </span>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            {/* Nitrogen (N) */}
             <div
               style={{
                 background: "var(--bg-card)",
                 borderRadius: "16px",
-                padding: "18px 14px",
+                padding: "14px",
                 boxShadow: "var(--glow-card)",
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "center",
-                gap: "10px",
-                border: `1.5px solid ${fanOn ? "#D1FAE5" : "var(--bg-hover)"}`,
-                transition: "border-color 0.3s",
+                gap: "6px",
               }}
             >
-              <div
-                className="no-invert"
-                style={{
-                  background: fanOn ? "#F0FDF4" : "var(--bg-app)",
-                  borderRadius: "14px",
-                  width: "52px",
-                  height: "52px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "background 0.3s",
-                }}
-              >
-                <Wind size={26} color={fanOn ? "#22C55E" : "var(--text-muted)"} strokeWidth={1.8} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  Nitrogen (N)
+                </span>
+                <div
+                  style={{
+                    background: "#EFF6FF",
+                    borderRadius: "8px",
+                    padding: "4px",
+                    color: "#2563EB",
+                  }}
+                >
+                  <Sparkles size={14} />
+                </div>
               </div>
-              <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textAlign: "center" }}>
-                Kipas Sirkulasi
-              </span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
+                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+                  {sensorData.nitrogen}
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>mg/kg</span>
+              </div>
               <span
-                className="no-invert"
                 style={{
-                  background: fanOn ? "#22C55E" : "var(--text-muted)",
-                  color: "white",
-                  borderRadius: "20px",
-                  padding: "4px 16px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  boxShadow: fanOn ? "var(--glow-success)" : "none",
-                  transition: "all 0.3s",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: sensorData.nitrogen < 30 ? "#EA580C" : "#16A34A",
                 }}
               >
-                {fanOn ? "ON" : "OFF"}
+                {sensorData.nitrogen < 30 ? "Rendah" : "Optimal"}
               </span>
             </div>
 
-            {/* Heater Card */}
+            {/* Fosfor (P) */}
             <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  Fosfor (P)
+                </span>
+                <div
+                  style={{
+                    background: "#FFF7ED",
+                    borderRadius: "8px",
+                    padding: "4px",
+                    color: "#EA580C",
+                  }}
+                >
+                  <FlaskConical size={14} />
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
+                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+                  {sensorData.phosphorus}
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>mg/kg</span>
+              </div>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: sensorData.phosphorus < 20 ? "#EA580C" : "#16A34A",
+                }}
+              >
+                {sensorData.phosphorus < 20 ? "Rendah" : "Optimal"}
+              </span>
+            </div>
+
+            {/* Kalium (K) */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  Kalium (K)
+                </span>
+                <div
+                  style={{
+                    background: "#F5F3FF",
+                    borderRadius: "8px",
+                    padding: "4px",
+                    color: "#7C3AED",
+                  }}
+                >
+                  <Layers size={14} />
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
+                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+                  {sensorData.potassium}
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>mg/kg</span>
+              </div>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: sensorData.potassium < 70 ? "#EA580C" : "#16A34A",
+                }}
+              >
+                {sensorData.potassium < 70 ? "Rendah" : "Optimal"}
+              </span>
+            </div>
+
+            {/* pH Tanah */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  pH Tanah
+                </span>
+                <div
+                  style={{
+                    background: "#ECFDF5",
+                    borderRadius: "8px",
+                    padding: "4px",
+                    color: "#059669",
+                  }}
+                >
+                  <Activity size={14} />
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
+                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+                  {sensorData.ph.toFixed(1)}
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>pH</span>
+              </div>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: sensorData.ph < 6 ? "#EA580C" : sensorData.ph > 7.5 ? "#2563EB" : "#16A34A",
+                }}
+              >
+                {sensorData.ph < 6 ? "Masam" : sensorData.ph > 7.5 ? "Basa" : "Netral (Ideal)"}
+              </span>
+            </div>
+
+            {/* Konduktivitas EC */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  EC (Salinitas)
+                </span>
+                <div
+                  style={{
+                    background: "#F0FDFA",
+                    borderRadius: "8px",
+                    padding: "4px",
+                    color: "#0D9488",
+                  }}
+                >
+                  <Zap size={14} />
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
+                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+                  {sensorData.ec.toLocaleString()}
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>µS/cm</span>
+              </div>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: sensorData.ec > 2000 ? "#DC2626" : "#16A34A",
+                }}
+              >
+                {sensorData.ec > 2000 ? "Salinitas Tinggi" : "Ideal"}
+              </span>
+            </div>
+
+            {/* Suhu Tanah */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  Suhu Tanah
+                </span>
+                <div
+                  style={{
+                    background: "#FFF1F2",
+                    borderRadius: "8px",
+                    padding: "4px",
+                    color: "#E11D48",
+                  }}
+                >
+                  <Thermometer size={14} />
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
+                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+                  {sensorData.temperature.toFixed(1)}
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>°C</span>
+              </div>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: "#16A34A" }}>
+                Normal Perakaran
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actuators Grid */}
+        <div>
+          <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "10px" }}>
+            Status Aktuator & Irigasi
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            {/* Pompa Irigasi Tetes */}
+            <div
+              onClick={activeUser.role !== "viewer" ? toggleIrrigation : handleBlockedAction}
               style={{
                 background: "var(--bg-card)",
                 borderRadius: "16px",
@@ -483,14 +771,15 @@ export function DashboardScreen() {
                 flexDirection: "column",
                 alignItems: "center",
                 gap: "10px",
-                border: `1.5px solid ${heaterOn ? "#FFEDD5" : "var(--bg-hover)"}`,
+                border: `1.5px solid ${irrigationOn ? "#D1FAE5" : "var(--bg-hover)"}`,
+                cursor: activeUser.role !== "viewer" ? "pointer" : "default",
                 transition: "border-color 0.3s",
               }}
             >
               <div
                 className="no-invert"
                 style={{
-                  background: heaterOn ? "#FFF7ED" : "var(--bg-app)",
+                  background: irrigationOn ? "#F0FDF4" : "var(--bg-app)",
                   borderRadius: "14px",
                   width: "52px",
                   height: "52px",
@@ -500,25 +789,77 @@ export function DashboardScreen() {
                   transition: "background 0.3s",
                 }}
               >
-                <Flame size={26} color={heaterOn ? "#F97316" : "var(--text-muted)"} strokeWidth={1.8} />
+                <Droplets size={26} color={irrigationOn ? "#22C55E" : "var(--text-muted)"} strokeWidth={1.8} />
               </div>
               <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textAlign: "center" }}>
-                Pemanas
+                Irigasi Tetes
               </span>
               <span
                 className="no-invert"
                 style={{
-                  background: heaterOn ? "#F97316" : "var(--text-muted)",
+                  background: irrigationOn ? "#22C55E" : "var(--text-muted)",
                   color: "white",
                   borderRadius: "20px",
                   padding: "4px 16px",
                   fontSize: "12px",
                   fontWeight: 700,
-                  boxShadow: heaterOn ? "var(--glow-warning)" : "none",
+                  boxShadow: irrigationOn ? "var(--glow-success)" : "none",
                   transition: "all 0.3s",
                 }}
               >
-                {heaterOn ? "ON" : "OFF"}
+                {irrigationOn ? "ON" : "OFF"}
+              </span>
+            </div>
+
+            {/* Dosing Pupuk NPK */}
+            <div
+              onClick={activeUser.role !== "viewer" ? toggleFertilizer : handleBlockedAction}
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "16px",
+                padding: "18px 14px",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px",
+                border: `1.5px solid ${fertilizerOn ? "#FFEDD5" : "var(--bg-hover)"}`,
+                cursor: activeUser.role !== "viewer" ? "pointer" : "default",
+                transition: "border-color 0.3s",
+              }}
+            >
+              <div
+                className="no-invert"
+                style={{
+                  background: fertilizerOn ? "#FFF7ED" : "var(--bg-app)",
+                  borderRadius: "14px",
+                  width: "52px",
+                  height: "52px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "background 0.3s",
+                }}
+              >
+                <FlaskConical size={26} color={fertilizerOn ? "#F97316" : "var(--text-muted)"} strokeWidth={1.8} />
+              </div>
+              <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textAlign: "center" }}>
+                Katup Nutrisi NPK
+              </span>
+              <span
+                className="no-invert"
+                style={{
+                  background: fertilizerOn ? "#F97316" : "var(--text-muted)",
+                  color: "white",
+                  borderRadius: "20px",
+                  padding: "4px 16px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  boxShadow: fertilizerOn ? "var(--glow-warning)" : "none",
+                  transition: "all 0.3s",
+                }}
+              >
+                {fertilizerOn ? "ON" : "OFF"}
               </span>
             </div>
           </div>
