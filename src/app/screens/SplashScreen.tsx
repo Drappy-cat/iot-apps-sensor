@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
+import "./SplashScreen.css";
 
 type Phase = "logo" | "brand" | "tagline" | "loading" | "done";
 
@@ -43,7 +44,10 @@ export function SplashScreen() {
     setProgress(0);
     const id = setInterval(() => {
       setProgress((p) => {
-        if (p >= 100) { clearInterval(id); return 100; }
+        if (p >= 100) {
+          clearInterval(id);
+          return 100;
+        }
         return p + 2.5;
       });
     }, 35);
@@ -53,19 +57,7 @@ export function SplashScreen() {
   const isLoading = phase === "loading" || phase === "done";
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(155deg, #064E3B 0%, #065F46 30%, #047857 60%, #059669 85%, #10B981 100%)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "'Inter', sans-serif",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
+    <div className="splash-container">
       {/* ── Decorative circles ── */}
       {[
         { top: "-120px", right: "-80px", size: 300, opacity: 0.06 },
@@ -85,6 +77,7 @@ export function SplashScreen() {
             height: `${c.size}px`,
             borderRadius: "50%",
             background: `rgba(255,255,255,${c.opacity})`,
+            pointerEvents: "none",
           }}
         />
       ))}
@@ -118,294 +111,183 @@ export function SplashScreen() {
             height: `${s.size}px`,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.6)",
+            pointerEvents: "none",
           }}
         />
       ))}
 
       {/* ── Horizontal glowing strip ── */}
-      <div
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "-20%",
-          width: "140%",
-          height: "1px",
-          background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
-          transform: "translateY(-50%)",
-        }}
-      />
+      <div className="splash-glow-strip" />
 
-      {/* ══ Main content ══ */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "0",
-          zIndex: 10,
-          width: "100%",
-          padding: "0 32px",
-          boxSizing: "border-box",
-        }}
-      >
-        {/* Logo */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.4, y: 30 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
-          style={{
-            width: "120px",
-            height: "120px",
-            borderRadius: "36px",
-            background: "rgba(255,255,255,0.12)",
-            border: "2px solid rgba(255,255,255,0.2)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backdropFilter: "blur(12px)",
-            marginBottom: "32px",
-            position: "relative",
-            boxShadow: "0px 0px 60px rgba(16, 185, 129, 0.4), 0px 8px 32px rgba(0,0,0,0.25)",
-          }}
-        >
-          {/* Glow ring */}
+      {/* ══ Main content container (Responsive Portrait & Landscape) ══ */}
+      <div className="splash-content">
+        {/* Left Column in Landscape / Top in Portrait: Brand & Logo */}
+        <div className="splash-brand-section">
+          {/* Logo with strict 1:1 Aspect Ratio (Never stretched) */}
           <motion.div
-            animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-            style={{
-              position: "absolute",
-              inset: "-12px",
-              borderRadius: "46px",
-              border: "2px solid rgba(52, 211, 153, 0.4)",
-              pointerEvents: "none",
-            }}
-          />
-          <svg width="68" height="68" viewBox="0 0 68 68" fill="none">
-            {/* Greenhouse body */}
-            <rect x="9" y="30" width="50" height="32" rx="4" fill="white" fillOpacity="0.2" />
-            {/* Roof */}
-            <path d="M5 30L34 8L63 30" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-            {/* Windows */}
-            <rect x="13" y="39" width="13" height="14" rx="3" fill="white" fillOpacity="0.55" />
-            <rect x="42" y="39" width="13" height="14" rx="3" fill="white" fillOpacity="0.55" />
-            {/* Door */}
-            <rect x="27" y="44" width="14" height="18" rx="3" fill="white" fillOpacity="0.75" />
-            {/* Leaf */}
-            <path d="M34 13 C34 13, 43 19, 43 27 C43 31.5, 39 35, 34 35 C29 35, 25 31.5, 25 27 C25 19, 34 13, 34 13Z"
-              fill="white" fillOpacity="0.92" />
-            <path d="M34 13 L34 35" stroke="#34D399" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M27 24 Q34 21 41 24" stroke="#34D399" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          </svg>
-        </motion.div>
-
-        {/* Brand name */}
-        <AnimatePresence>
-          {(phase !== "logo") && (
+            initial={{ opacity: 0, scale: 0.4, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
+            className="splash-logo-box"
+          >
+            {/* Glow ring */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              style={{ textAlign: "center", marginBottom: "10px" }}
-            >
-              <p
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,0.5)",
-                  letterSpacing: "4px",
-                  textTransform: "uppercase",
-                  marginBottom: "10px",
-                }}
-              >
-                SELAMAT DATANG DI
-              </p>
-              <h1
-                style={{
-                  fontSize: "38px",
-                  fontWeight: 900,
-                  color: "var(--bg-card)",
-                  letterSpacing: "-1px",
-                  lineHeight: 1.1,
-                  margin: "0 0 4px",
-                }}
-              >
-                Magetan
-              </h1>
-              <h1
-                style={{
-                  fontSize: "38px",
-                  fontWeight: 900,
-                  color: "#34D399",
-                  letterSpacing: "-1px",
-                  lineHeight: 1.1,
-                  margin: 0,
-                  textShadow: "0px 0px 30px rgba(52,211,153,0.5)",
-                }}
-              >
-                Greenhouse
-              </h1>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.6, 0.3] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+              className="splash-glow-ring"
+            />
+            <svg className="splash-logo-svg" viewBox="0 0 68 68" fill="none">
+              {/* Greenhouse body */}
+              <rect x="9" y="30" width="50" height="32" rx="4" fill="white" fillOpacity="0.2" />
+              {/* Roof */}
+              <path d="M5 30L34 8L63 30" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Windows */}
+              <rect x="13" y="39" width="13" height="14" rx="3" fill="white" fillOpacity="0.55" />
+              <rect x="42" y="39" width="13" height="14" rx="3" fill="white" fillOpacity="0.55" />
+              {/* Door */}
+              <rect x="27" y="44" width="14" height="18" rx="3" fill="white" fillOpacity="0.75" />
+              {/* Leaf */}
+              <path
+                d="M34 13 C34 13, 43 19, 43 27 C43 31.5, 39 35, 34 35 C29 35, 25 31.5, 25 27 C25 19, 34 13, 34 13Z"
+                fill="white"
+                fillOpacity="0.92"
+              />
+              <path d="M34 13 L34 35" stroke="#34D399" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M27 24 Q34 21 41 24" stroke="#34D399" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+            </svg>
+          </motion.div>
 
-        {/* Tagline */}
-        <AnimatePresence>
-          {(phase === "tagline" || phase === "loading" || phase === "done") && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              style={{ textAlign: "center", marginBottom: "52px" }}
-            >
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  borderRadius: "30px",
-                  padding: "8px 18px",
-                  backdropFilter: "blur(8px)",
-                }}
+          {/* Brand Titles */}
+          <AnimatePresence>
+            {phase !== "logo" && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="splash-brand-titles"
               >
-                <span style={{ fontSize: "14px" }}>🌿</span>
-                <span
+                <p className="splash-greeting">SELAMAT DATANG DI</p>
+                <h1 className="splash-title-white">Magetan</h1>
+                <h1 className="splash-title-accent">Greenhouse</h1>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Tagline */}
+          <AnimatePresence>
+            {(phase === "tagline" || phase === "loading" || phase === "done") && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="splash-tagline-container"
+              >
+                <div className="splash-tagline-pill">
+                  <span style={{ fontSize: "14px" }}>🌿</span>
+                  <span className="splash-tagline-text">
+                    Sistem Otomasi Cerdas · NPK 7-in-1 IoT
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Right Column in Landscape / Bottom Section in Portrait: Loading & Badges */}
+        <div className={`splash-action-section ${isLoading ? "is-loading" : ""}`}>
+          {/* Loading Section */}
+          <AnimatePresence>
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="splash-loading-box"
+              >
+                {/* Label row */}
+                <div
                   style={{
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "rgba(255,255,255,0.8)",
-                    letterSpacing: "0.2px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    width: "100%",
                   }}
                 >
-                  Sistem Otomasi Cerdas · NPK 7-in-1 IoT
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", fontWeight: 500 }}>
+                    Memuat sistem...
+                  </span>
+                  <span style={{ fontSize: "12px", color: "#34D399", fontWeight: 700 }}>
+                    {Math.min(100, Math.round(progress))}%
+                  </span>
+                </div>
 
-        {/* Loading section */}
-        <AnimatePresence>
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              style={{
-                width: "220px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "14px",
-              }}
-            >
-              {/* Label row */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  width: "100%",
-                }}
-              >
-                <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>
-                  Memuat sistem...
-                </span>
-                <span style={{ fontSize: "12px", color: "rgba(52,211,153,0.9)", fontWeight: 700 }}>
-                  {Math.min(100, Math.round(progress))}%
-                </span>
-              </div>
-
-              {/* Track */}
-              <div
-                style={{
-                  width: "100%",
-                  height: "5px",
-                  background: "rgba(255,255,255,0.15)",
-                  borderRadius: "10px",
-                  overflow: "hidden",
-                }}
-              >
-                <motion.div
-                  animate={{ width: `${progress}%` }}
-                  transition={{ ease: "linear", duration: 0.1 }}
+                {/* Track */}
+                <div
                   style={{
-                    height: "100%",
-                    background: "linear-gradient(90deg, #34D399, #10B981)",
+                    width: "100%",
+                    height: "6px",
+                    background: "rgba(255,255,255,0.15)",
                     borderRadius: "10px",
-                    boxShadow: "0px 0px 8px rgba(52,211,153,0.6)",
+                    overflow: "hidden",
                   }}
-                />
-              </div>
-
-              {/* Animated dots */}
-              <div style={{ display: "flex", gap: "8px" }}>
-                {[0, 1, 2].map((i) => (
+                >
                   <motion.div
-                    key={i}
-                    animate={{ scale: [0.6, 1.2, 0.6], opacity: [0.4, 1, 0.4] }}
-                    transition={{ duration: 1, delay: i * 0.22, repeat: Infinity }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ ease: "linear", duration: 0.1 }}
                     style={{
-                      width: "7px",
-                      height: "7px",
-                      borderRadius: "50%",
-                      background: "#34D399",
+                      height: "100%",
+                      background: "linear-gradient(90deg, #34D399, #10B981)",
+                      borderRadius: "10px",
+                      boxShadow: "0px 0px 10px rgba(52,211,153,0.7)",
                     }}
                   />
+                </div>
+
+                {/* Animated dots */}
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {[0, 1, 2].map((i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ scale: [0.6, 1.2, 0.6], opacity: [0.4, 1, 0.4] }}
+                      transition={{ duration: 1, delay: i * 0.22, repeat: Infinity }}
+                      style={{
+                        width: "7px",
+                        height: "7px",
+                        borderRadius: "50%",
+                        background: "#34D399",
+                      }}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Feature Badges */}
+          <AnimatePresence>
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="splash-badges-wrapper"
+              >
+                {["🌡 Suhu", "💧 Irigasi", "🌬 Ventilasi"].map((label) => (
+                  <div key={label} className="splash-badge-item">
+                    {label}
+                  </div>
                 ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* ── Feature badges (bottom) ── */}
-      <AnimatePresence>
-        {isLoading && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            style={{
-              position: "absolute",
-              bottom: "70px",
-              display: "flex",
-              gap: "10px",
-            }}
-          >
-            {["🌡 Suhu", "💧 Irigasi", "🌬 Ventilasi"].map((label) => (
-              <div
-                key={label}
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: "20px",
-                  padding: "5px 12px",
-                  fontSize: "11px",
-                  fontWeight: 500,
-                  color: "rgba(255,255,255,0.65)",
-                  backdropFilter: "blur(6px)",
-                }}
-              >
-                {label}
-              </div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Version ── */}
+      {/* ── Version Footer ── */}
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.5 }}
-        style={{
-          position: "absolute",
-          bottom: "28px",
-          fontSize: "11px",
-          color: "rgba(255,255,255,0.25)",
-          fontWeight: 400,
-        }}
+        className="splash-version-text"
       >
         v1.2.0 · © 2025 Magetan Greenhouse
       </motion.p>
