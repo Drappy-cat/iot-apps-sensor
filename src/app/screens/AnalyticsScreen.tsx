@@ -8,9 +8,25 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Download, Droplets, AlertTriangle, Calendar, X, CheckCircle2, Sprout, Activity, Zap, Layers } from "lucide-react";
+import {
+  Download,
+  Droplets,
+  AlertTriangle,
+  Calendar,
+  X,
+  CheckCircle2,
+  Sprout,
+  Activity,
+  Zap,
+  Layers,
+  FileText,
+  RefreshCw,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
+import { generateNPKSoilPDFReport } from "../services/pdfReportService";
+import { hapticLight, hapticSuccess } from "../services/hapticsService";
+import { getActiveUser } from "../utils/authHelper";
 
 export interface SoilDataPoint {
   time: string;
@@ -144,6 +160,15 @@ export function AnalyticsScreen() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [exportSuccess, setExportSuccess] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   const currentData = getFilteredData(activeFilter);
   const avgMoisture = (currentData.reduce((acc, curr) => acc + curr.moisture, 0) / currentData.length).toFixed(1);
@@ -158,6 +183,7 @@ export function AnalyticsScreen() {
   useEffect(() => { localStorage.setItem("iot_analytics_activity_filter", activeActivityFilter); }, [activeActivityFilter]);
 
   const handleExportCSV = () => {
+    hapticSuccess();
     let csvContent = "Waktu,Kelembaban (%),Suhu Tanah (°C),pH Tanah,EC (uS/cm),Nitrogen (mg/kg),Fosfor (mg/kg),Kalium (mg/kg)\n";
     currentData.forEach(row => {
       csvContent += `${row.time},${row.moisture},${row.suhu},${row.ph},${row.ec},${row.n},${row.p},${row.k}\n`;
@@ -175,10 +201,28 @@ export function AnalyticsScreen() {
     document.body.removeChild(link);
 
     setExportSuccess(true);
+    setToastMessage("Data riwayat CSV berhasil diunduh!");
     setTimeout(() => setExportSuccess(false), 3000);
   };
 
+  const handleExportPDF = () => {
+    hapticSuccess();
+    setIsExportingPDF(true);
+    try {
+      const activeUser = getActiveUser();
+      const operatorName = activeUser.namaLengkap || activeUser.name || "Operator Lapangan";
+      generateNPKSoilPDFReport(currentData, activeFilter, operatorName);
+      setToastMessage("Laporan PDF resmi berhasil dicetak & diunduh!");
+    } catch (err) {
+      console.error("Gagal mencetak PDF:", err);
+      setToastMessage("Gagal membuat laporan PDF.");
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   const handleFilterClick = (filter: string) => {
+    hapticLight();
     if (filter === "Lainnya") {
       setDateModalOpen(true);
     } else {
@@ -264,7 +308,10 @@ export function AnalyticsScreen() {
               {chartModes.map((m) => (
                 <button
                   key={m.id}
-                  onClick={() => setActiveChartMode(m.id as any)}
+                  onClick={() => {
+                    hapticLight();
+                    setActiveChartMode(m.id as any);
+                  }}
                   style={{
                     background: activeChartMode === m.id ? "var(--bg-card)" : "transparent",
                     color: activeChartMode === m.id ? "#3B82F6" : "var(--text-muted)",
@@ -379,27 +426,58 @@ export function AnalyticsScreen() {
 
         {/* Activity Log Section */}
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
             <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Log Kejadian Tanah</span>
-            <button
-              onClick={handleExportCSV}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                background: "var(--bg-hover)",
-                border: "none",
-                borderRadius: "8px",
-                padding: "6px 12px",
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "#3B82F6",
-                cursor: "pointer",
-              }}
-            >
-              <Download size={13} />
-              Ekspor CSV
-            </button>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+              <button
+                onClick={handleExportCSV}
+                title="Ekspor data tabel ke format CSV / Excel"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: "var(--bg-hover)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  padding: "6px 10px",
+                  fontSize: "11.5px",
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                <Download size={13} color="#3B82F6" />
+                CSV
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={isExportingPDF}
+                title="Cetak & Unduh Laporan PDF Resmi Lengkap (A4)"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background: "linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%)",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  color: "white",
+                  cursor: isExportingPDF ? "not-allowed" : "pointer",
+                  boxShadow: "0 2px 8px rgba(59, 130, 246, 0.35)",
+                  transition: "all 0.2s",
+                }}
+              >
+                {isExportingPDF ? (
+                  <RefreshCw size={13} className="spin" />
+                ) : (
+                  <FileText size={13} />
+                )}
+                {isExportingPDF ? "Mencetak..." : "Cetak PDF"}
+              </button>
+            </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -547,6 +625,40 @@ export function AnalyticsScreen() {
                 Terapkan Filter
               </button>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              position: "fixed",
+              top: "24px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 9999,
+              background: "#1E293B",
+              color: "white",
+              padding: "12px 20px",
+              borderRadius: "12px",
+              fontSize: "13px",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              maxWidth: "90%",
+            }}
+          >
+            <CheckCircle2 size={18} color="#22C55E" />
+            <span>{toastMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>

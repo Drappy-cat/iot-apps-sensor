@@ -3,6 +3,7 @@ import { Plus, Sun, Moon, Clock, X, Droplets, Sprout } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
 import { getActiveUser } from "../utils/authHelper";
+import { hapticSuccess, hapticWarning } from "../services/hapticsService";
 
 interface Schedule {
   id: number;
@@ -75,9 +76,11 @@ export function ScheduleScreen() {
 
   const toggleSchedule = (id: number) => {
     if (activeUser.role === "viewer") {
+      hapticWarning();
       setToastMessage("Akses Ditolak: Peran Viewer tidak diizinkan mengubah jadwal.");
       return;
     }
+    hapticSuccess();
     setSchedules((prev) =>
       prev.map((s) => (s.id === id ? { ...s, active: !s.active } : s))
     );
@@ -92,6 +95,7 @@ export function ScheduleScreen() {
 
   const handleAddSchedule = () => {
     if (!newTitle.trim()) return;
+    hapticSuccess();
     const newSchedule: Schedule = {
       id: Date.now(),
       title: newTitle,

@@ -18,6 +18,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
 import { getActiveUser } from "../utils/authHelper";
 import { useSensorData } from "../hooks/useSensorData";
+import { hapticMedium, hapticSuccess, hapticWarning } from "../services/hapticsService";
+import { evaluateSensorAlerts } from "../services/localNotificationService";
 
 export function DashboardScreen() {
   const navigate = useNavigate();
@@ -36,10 +38,17 @@ export function DashboardScreen() {
     toggleFertilizer,
   } = useSensorData();
 
-  const decrement = () => setSetpoint((p) => Math.max(20, p - 5));
-  const increment = () => setSetpoint((p) => Math.min(95, p + 5));
+  const decrement = () => {
+    hapticMedium();
+    setSetpoint((p) => Math.max(20, p - 5));
+  };
+  const increment = () => {
+    hapticMedium();
+    setSetpoint((p) => Math.min(95, p + 5));
+  };
 
   const handleBlockedAction = () => {
+    hapticWarning();
     setToastMessage("Akses Ditolak: Peran Viewer hanya dapat memantau data.");
   };
 
@@ -49,6 +58,11 @@ export function DashboardScreen() {
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
+
+  // Evaluate critical soil alerts whenever sensor data changes
+  useEffect(() => {
+    evaluateSensorAlerts(sensorData);
+  }, [sensorData]);
 
   // Format today's date in Indonesian
   const todayStr = new Intl.DateTimeFormat("id-ID", {
@@ -761,7 +775,7 @@ export function DashboardScreen() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             {/* Pompa Irigasi Tetes */}
             <div
-              onClick={activeUser.role !== "viewer" ? toggleIrrigation : handleBlockedAction}
+              onClick={activeUser.role !== "viewer" ? () => { hapticSuccess(); toggleIrrigation(); } : handleBlockedAction}
               style={{
                 background: "var(--bg-card)",
                 borderRadius: "16px",
@@ -813,7 +827,7 @@ export function DashboardScreen() {
 
             {/* Dosing Pupuk NPK */}
             <div
-              onClick={activeUser.role !== "viewer" ? toggleFertilizer : handleBlockedAction}
+              onClick={activeUser.role !== "viewer" ? () => { hapticSuccess(); toggleFertilizer(); } : handleBlockedAction}
               style={{
                 background: "var(--bg-card)",
                 borderRadius: "16px",

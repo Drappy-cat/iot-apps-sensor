@@ -14,6 +14,7 @@ import {
   Activity,
   Zap,
 } from "lucide-react";
+import { hapticLight, hapticSuccess, hapticWarning } from "../services/hapticsService";
 
 type NotifType = "warning" | "success" | "error" | "info";
 
@@ -111,21 +112,40 @@ export function NotificationScreen() {
     localStorage.setItem("iot_notifications", JSON.stringify(notifications));
   }, [notifications]);
 
+  useEffect(() => {
+    const handleUpdate = () => {
+      const saved = localStorage.getItem("iot_notifications");
+      if (saved) {
+        try {
+          setNotifications(JSON.parse(saved));
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener("iot_notifications_updated", handleUpdate);
+    return () => window.removeEventListener("iot_notifications_updated", handleUpdate);
+  }, []);
+
   const markAllAsRead = () => {
+    hapticSuccess();
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
   const clearAll = () => {
+    hapticWarning();
     setNotifications([]);
   };
 
   const toggleRead = (id: number) => {
+    hapticLight();
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
     );
   };
 
   const deleteOne = (id: number) => {
+    hapticLight();
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
@@ -256,7 +276,10 @@ export function NotificationScreen() {
               Semua ({notifications.length})
             </button>
             <button
-              onClick={() => setFilter("belum_dibaca")}
+              onClick={() => {
+                hapticLight();
+                setFilter("belum_dibaca");
+              }}
               style={{
                 background: filter === "belum_dibaca" ? "#3B82F6" : "var(--bg-card)",
                 color: filter === "belum_dibaca" ? "white" : "var(--text-muted)",

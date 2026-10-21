@@ -19,6 +19,8 @@ import {
   FlaskConical,
   CheckCircle2,
   RefreshCw,
+  BellRing,
+  Smartphone,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
@@ -31,6 +33,13 @@ import {
   STORAGE_KEY_SIM_ENABLED,
   INITIAL_SENSOR_DATA,
 } from "../services/firebaseService";
+import {
+  hapticLight,
+  hapticMedium,
+  hapticSuccess,
+  hapticWarning,
+} from "../services/hapticsService";
+import { sendTestNotification } from "../services/localNotificationService";
 
 export function SettingsScreen() {
   const navigate = useNavigate();
@@ -78,6 +87,7 @@ export function SettingsScreen() {
   }, [simMoisture, simTemp, simPH, simEC, simN, simP, simK]);
 
   const handleSaveFirebase = () => {
+    hapticSuccess();
     saveFirebaseConfig(fbConfig);
     setFbSaved(true);
     setToastMessage("Konfigurasi Firebase berhasil disimpan!");
@@ -92,8 +102,24 @@ export function SettingsScreen() {
   }, [toastMessage]);
 
   const handleLogout = () => {
+    hapticWarning();
     logoutUser();
     navigate("/login");
+  };
+
+  const handleTestNotification = async () => {
+    hapticMedium();
+    const sent = await sendTestNotification();
+    if (sent) {
+      setToastMessage("🔔 Notifikasi uji coba berhasil dikirim ke HP!");
+    } else {
+      setToastMessage("⚠️ Izin notifikasi belum diaktifkan.");
+    }
+  };
+
+  const handleTestHaptics = () => {
+    hapticSuccess();
+    setToastMessage("📳 Efek getaran haptic berhasil dijalankan!");
   };
 
   const Toggle = ({
@@ -325,12 +351,21 @@ export function SettingsScreen() {
                   </p>
                 </div>
               </div>
-              <Toggle value={darkMode} onChange={(e) => toggleTheme(e)} />
+              <Toggle
+                value={darkMode}
+                onChange={(e) => {
+                  hapticLight();
+                  toggleTheme(e);
+                }}
+              />
             </div>
 
             {/* Notifications */}
             <div
-              onClick={() => navigate("/notifications")}
+              onClick={() => {
+                hapticLight();
+                navigate("/notifications");
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -363,6 +398,129 @@ export function SettingsScreen() {
                 </div>
               </div>
               <ChevronRight size={16} color="var(--border-strong)" />
+            </div>
+          </div>
+        </div>
+
+        {/* Fitur Mobile & Getaran */}
+        <div>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "var(--icon-muted)",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+            }}
+          >
+            Pengalaman Mobile (Capacitor Native)
+          </p>
+          <div
+            style={{
+              background: "var(--bg-card)",
+              borderRadius: "16px",
+              overflow: "hidden",
+              boxShadow: "0px 2px 8px rgba(0,0,0,0.04)",
+            }}
+          >
+            {/* Test Notification Row */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 18px",
+                borderBottom: "1px solid var(--bg-hover)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    background: "#EFF6FF",
+                    borderRadius: "10px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <BellRing size={18} color="#2563EB" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                    Tes Notifikasi HP
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--icon-muted)", margin: 0 }}>
+                    Uji coba push alert kondisi kritis
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleTestNotification}
+                style={{
+                  background: "var(--bg-hover)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#2563EB",
+                  cursor: "pointer",
+                }}
+              >
+                Kirim Tes
+              </button>
+            </div>
+
+            {/* Test Haptics Row */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 18px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    background: "#F0FDF4",
+                    borderRadius: "10px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Smartphone size={18} color="#16A34A" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                    Tes Umpan Balik Getaran
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--icon-muted)", margin: 0 }}>
+                    Uji respons getar (Haptic Feedback)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleTestHaptics}
+                style={{
+                  background: "var(--bg-hover)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#16A34A",
+                  cursor: "pointer",
+                }}
+              >
+                Coba Getar
+              </button>
             </div>
           </div>
         </div>
@@ -579,7 +737,13 @@ export function SettingsScreen() {
                       </p>
                     </div>
                   </div>
-                  <Toggle value={simEnabled} onChange={() => setSimEnabled(!simEnabled)} />
+                  <Toggle
+                    value={simEnabled}
+                    onChange={() => {
+                      hapticMedium();
+                      setSimEnabled(!simEnabled);
+                    }}
+                  />
                 </div>
 
                 <AnimatePresence initial={false}>
@@ -867,9 +1031,43 @@ export function SettingsScreen() {
           <LogOut size={18} strokeWidth={2} />
           Keluar (Logout)
         </button>
-      </div>
 
-      <BottomNav />
+        {/* Toast Notification */}
+        <AnimatePresence>
+          {toastMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              style={{
+                position: "fixed",
+                top: "24px",
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 9999,
+                background: "#1E293B",
+                color: "white",
+                padding: "12px 20px",
+                borderRadius: "12px",
+                fontSize: "13px",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                maxWidth: "90%",
+              }}
+            >
+              <CheckCircle2 size={18} color="#22C55E" />
+              <span>{toastMessage}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <BottomNav />
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router";
 import { Home, BarChart2, Clock, Settings } from "lucide-react";
 import { motion } from "motion/react";
+import { hapticLight } from "../services/hapticsService";
 
 const navItems = [
   { icon: Home, label: "Beranda", path: "/dashboard" },
@@ -39,7 +40,7 @@ export function BottomNav() {
           <motion.button
             key={path}
             whileTap={{ scale: 0.85 }}
-            onClick={() => navigate(path)}
+            onClick={() => { hapticLight(); navigate(path); }}
             style={{
               display: "flex",
               flexDirection: "column",
