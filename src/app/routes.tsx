@@ -1,22 +1,65 @@
 import { createBrowserRouter } from "react-router";
 import { SplashScreen } from "./screens/SplashScreen";
-import { LoginScreen } from "./screens/LoginScreen";
-import { RegisterScreen } from "./screens/RegisterScreen";
-import { ForgotPasswordScreen } from "./screens/ForgotPasswordScreen";
-import { DashboardScreen } from "./screens/DashboardScreen";
-import { AnalyticsScreen } from "./screens/AnalyticsScreen";
-import { ScheduleScreen } from "./screens/ScheduleScreen";
-import { SettingsScreen } from "./screens/SettingsScreen";
-import { NotificationScreen } from "./screens/NotificationScreen";
 
 export const router = createBrowserRouter([
-  { path: "/",                Component: SplashScreen },
-  { path: "/login",           Component: LoginScreen },
-  { path: "/register",        Component: RegisterScreen },
-  { path: "/forgot-password", Component: ForgotPasswordScreen },
-  { path: "/dashboard",       Component: DashboardScreen },
-  { path: "/analytics",       Component: AnalyticsScreen },
-  { path: "/schedule",        Component: ScheduleScreen },
-  { path: "/settings",        Component: SettingsScreen },
-  { path: "/notifications",   Component: NotificationScreen },
+  {
+    path: "/",
+    Component: SplashScreen,
+  },
+  {
+    path: "/login",
+    lazy: async () => {
+      const { LoginScreen } = await import("./screens/LoginScreen");
+      return { Component: LoginScreen };
+    },
+  },
+  {
+    path: "/register",
+    lazy: async () => {
+      const { RegisterScreen } = await import("./screens/RegisterScreen");
+      return { Component: RegisterScreen };
+    },
+  },
+  {
+    path: "/forgot-password",
+    lazy: async () => {
+      const { ForgotPasswordScreen } = await import("./screens/ForgotPasswordScreen");
+      return { Component: ForgotPasswordScreen };
+    },
+  },
+  {
+    path: "/dashboard",
+    lazy: async () => {
+      const { DashboardScreen } = await import("./screens/DashboardScreen");
+      return { Component: DashboardScreen };
+    },
+  },
+  {
+    path: "/analytics",
+    lazy: async () => {
+      const { AnalyticsScreen } = await import("./screens/AnalyticsScreen");
+      return { Component: AnalyticsScreen };
+    },
+  },
+  {
+    path: "/schedule",
+    lazy: async () => {
+      const { ScheduleScreen } = await import("./screens/ScheduleScreen");
+      return { Component: ScheduleScreen };
+    },
+  },
+  {
+    path: "/settings",
+    lazy: async () => {
+      const { SettingsScreen } = await import("./screens/SettingsScreen");
+      return { Component: SettingsScreen };
+    },
+  },
+  {
+    path: "/notifications",
+    lazy: async () => {
+      const { NotificationScreen } = await import("./screens/NotificationScreen");
+      return { Component: NotificationScreen };
+    },
+  },
 ]);

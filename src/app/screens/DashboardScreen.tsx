@@ -5,14 +5,11 @@ import {
   Droplets,
   Thermometer,
   Sprout,
-  Activity,
-  Zap,
-  Layers,
   FlaskConical,
   Wifi,
   Sparkles,
-  Waves,
   RefreshCw,
+  Layers,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";

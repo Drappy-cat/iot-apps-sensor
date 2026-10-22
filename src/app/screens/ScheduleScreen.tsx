@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Sun, Moon, Clock, X, Droplets, Sprout } from "lucide-react";
+import { Plus, Sun, Clock, X, Droplets, Sprout } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
 import { getActiveUser } from "../utils/authHelper";

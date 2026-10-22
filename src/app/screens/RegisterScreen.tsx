@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-
 import { registerUser, type User as AuthUser } from "../utils/authHelper";
 
 interface FormData {
@@ -36,13 +35,13 @@ interface FieldError {
   agree?: string;
 }
 
-const roles = [
+const ROLES = [
   { value: "operator", label: "Operator", desc: "Pantau & kendalikan sistem" },
-  { value: "admin",    label: "Administrator", desc: "Akses penuh semua fitur" },
-  { value: "viewer",   label: "Viewer", desc: "Hanya lihat data & laporan" },
+  { value: "admin", label: "Administrator", desc: "Akses penuh semua fitur" },
+  { value: "viewer", label: "Viewer", desc: "Hanya lihat data & laporan" },
 ];
 
-const passwordStrength = (pw: string) => {
+const calculatePasswordStrength = (pw: string) => {
   if (!pw) return { level: 0, label: "", color: "" };
   let score = 0;
   if (pw.length >= 8) score++;
@@ -74,38 +73,46 @@ export function RegisterScreen() {
   const [submitted, setSubmitted] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const set = (key: keyof FormData, value: string | boolean) => {
-    setForm((f) => ({ ...f, [key]: value }));
-    setErrors((e) => ({ ...e, [key]: undefined }));
-  };
+  // Field updater
+  const setField = useCallback((key: keyof FormData, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  }, []);
 
-  const validate = (): boolean => {
-    const e: FieldError = {};
-    if (!form.namaLengkap.trim()) e.namaLengkap = "Nama lengkap wajib diisi";
-    else if (form.namaLengkap.trim().length < 3) e.namaLengkap = "Minimal 3 karakter";
+  // Form validation
+  const validate = useCallback((): boolean => {
+    const nextErrors: FieldError = {};
+    const nama = form.namaLengkap.trim();
+    const idOp = form.idOperator.trim();
+    const email = form.email.trim();
 
-    if (!form.idOperator.trim()) e.idOperator = "ID Operator wajib diisi";
-    else if (!/^[A-Za-z0-9_-]{4,20}$/.test(form.idOperator))
-      e.idOperator = "4–20 karakter (huruf, angka, _, -)";
+    if (!nama) nextErrors.namaLengkap = "Nama lengkap wajib diisi";
+    else if (nama.length < 3) nextErrors.namaLengkap = "Minimal 3 karakter";
 
-    if (!form.email.trim()) e.email = "Email wajib diisi";
-    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Format email tidak valid";
+    if (!idOp) nextErrors.idOperator = "ID Operator wajib diisi";
+    else if (!/^[A-Za-z0-9_-]{4,20}$/.test(idOp))
+      nextErrors.idOperator = "4–20 karakter (huruf, angka, _, -)";
 
-    if (!form.role) e.role = "Pilih peran akun";
+    if (!email) nextErrors.email = "Email wajib diisi";
+    else if (!/\S+@\S+\.\S+/.test(email)) nextErrors.email = "Format email tidak valid";
 
-    if (!form.password) e.password = "Kata sandi wajib diisi";
-    else if (form.password.length < 8) e.password = "Minimal 8 karakter";
+    if (!form.role) nextErrors.role = "Pilih peran akun";
 
-    if (!form.confirmPassword) e.confirmPassword = "Konfirmasi kata sandi wajib diisi";
-    else if (form.password !== form.confirmPassword) e.confirmPassword = "Kata sandi tidak cocok";
+    if (!form.password) nextErrors.password = "Kata sandi wajib diisi";
+    else if (form.password.length < 8) nextErrors.password = "Minimal 8 karakter";
 
-    if (!form.agree) e.agree = "Setujui syarat & ketentuan terlebih dahulu";
+    if (!form.confirmPassword) nextErrors.confirmPassword = "Konfirmasi kata sandi wajib diisi";
+    else if (form.password !== form.confirmPassword)
+      nextErrors.confirmPassword = "Kata sandi tidak cocok";
 
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
+    if (!form.agree) nextErrors.agree = "Setujui syarat & ketentuan terlebih dahulu";
 
-  const handleSubmit = () => {
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }, [form]);
+
+  // Form submit handler
+  const handleSubmit = useCallback(() => {
     setSubmitted(true);
     if (!validate()) return;
 
@@ -119,16 +126,17 @@ export function RegisterScreen() {
 
     const res = registerUser(newUser);
     if (!res.success) {
-      setErrors((e) => ({ ...e, idOperator: res.error }));
+      setErrors((prev) => ({ ...prev, idOperator: res.error }));
       return;
     }
 
     setSuccess(true);
     setTimeout(() => navigate("/login"), 2200);
-  };
+  }, [form, validate, navigate]);
 
-  const pwStrength = passwordStrength(form.password);
-  const selectedRole = roles.find((r) => r.value === form.role);
+  // Memoized computations
+  const pwStrength = useMemo(() => calculatePasswordStrength(form.password), [form.password]);
+  const selectedRole = useMemo(() => ROLES.find((r) => r.value === form.role), [form.role]);
 
   /* ── Success overlay ── */
   if (success) {
@@ -214,7 +222,6 @@ export function RegisterScreen() {
           overflow: "hidden",
         }}
       >
-        {/* deco circles */}
         <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
         <div style={{ position: "absolute", bottom: "-20px", left: "-30px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
 
@@ -286,7 +293,6 @@ export function RegisterScreen() {
           overflowY: "auto",
         }}
       >
-
         {/* Section: Info Pribadi */}
         <SectionLabel icon="👤" label="Informasi Pribadi" />
 
@@ -299,10 +305,8 @@ export function RegisterScreen() {
             type="text"
             placeholder="Contoh: Budi Santoso"
             value={form.namaLengkap}
-            onChange={(e) => set("namaLengkap", e.target.value)}
-            style={inputStyle(submitted && !!errors.namaLengkap)}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "#10B981"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = submitted && errors.namaLengkap ? "#EF4444" : "var(--border-subtle)"; }}
+            onChange={(e) => setField("namaLengkap", e.target.value)}
+            className={`form-input-field ${submitted && errors.namaLengkap ? "input-error" : ""}`}
           />
         </FormField>
 
@@ -316,10 +320,8 @@ export function RegisterScreen() {
             type="text"
             placeholder="Contoh: op_budi01"
             value={form.idOperator}
-            onChange={(e) => set("idOperator", e.target.value.toLowerCase())}
-            style={inputStyle(submitted && !!errors.idOperator)}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "#10B981"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = submitted && errors.idOperator ? "#EF4444" : "var(--border-subtle)"; }}
+            onChange={(e) => setField("idOperator", e.target.value.toLowerCase())}
+            className={`form-input-field ${submitted && errors.idOperator ? "input-error" : ""}`}
           />
         </FormField>
 
@@ -332,20 +334,15 @@ export function RegisterScreen() {
             type="email"
             placeholder="contoh@email.com"
             value={form.email}
-            onChange={(e) => set("email", e.target.value)}
-            style={inputStyle(submitted && !!errors.email)}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "#10B981"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = submitted && errors.email ? "#EF4444" : "var(--border-subtle)"; }}
+            onChange={(e) => setField("email", e.target.value)}
+            className={`form-input-field ${submitted && errors.email ? "input-error" : ""}`}
           />
         </FormField>
 
         {/* Section: Peran */}
         <SectionLabel icon="🛡" label="Peran Akun" />
 
-        <FormField
-          label="Pilih Peran"
-          error={submitted ? errors.role : undefined}
-        >
+        <FormField label="Pilih Peran" error={submitted ? errors.role : undefined}>
           <div style={{ position: "relative" }}>
             <button
               type="button"
@@ -365,7 +362,7 @@ export function RegisterScreen() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 boxSizing: "border-box",
-                transition: "border-color 0.2s",
+                transition: "border-color 0.2s ease, box-shadow 0.2s ease",
               }}
             >
               {selectedRole ? (
@@ -376,10 +373,7 @@ export function RegisterScreen() {
               ) : (
                 "Pilih peran akun..."
               )}
-              <motion.div
-                animate={{ rotate: showRoleMenu ? 180 : 0 }}
-                transition={{ duration: 0.2 }}
-              >
+              <motion.div animate={{ rotate: showRoleMenu ? 180 : 0 }} transition={{ duration: 0.2 }}>
                 <ChevronDown size={16} color="var(--icon-muted)" />
               </motion.div>
             </button>
@@ -404,14 +398,17 @@ export function RegisterScreen() {
                     zIndex: 50,
                   }}
                 >
-                  {roles.map((r) => (
+                  {ROLES.map((r) => (
                     <button
                       key={r.value}
-                      onClick={() => { set("role", r.value); setShowRoleMenu(false); }}
+                      onClick={() => {
+                        setField("role", r.value);
+                        setShowRoleMenu(false);
+                      }}
                       style={{
                         width: "100%",
                         padding: "13px 16px",
-                        background: form.role === r.value ? "#F0FDF4" : "transparent",
+                        background: form.role === r.value ? "var(--bg-success-light, #F0FDF4)" : "transparent",
                         border: "none",
                         borderBottom: "1px solid var(--bg-hover)",
                         cursor: "pointer",
@@ -422,12 +419,14 @@ export function RegisterScreen() {
                         fontFamily: "'Inter', sans-serif",
                         transition: "background 0.15s",
                       }}
-                      onMouseEnter={(e) => { if (form.role !== r.value) e.currentTarget.style.background = "var(--bg-input)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = form.role === r.value ? "#F0FDF4" : "transparent"; }}
                     >
                       <div>
-                        <p style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{r.label}</p>
-                        <p style={{ margin: 0, fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{r.desc}</p>
+                        <p style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                          {r.label}
+                        </p>
+                        <p style={{ margin: 0, fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
+                          {r.desc}
+                        </p>
                       </div>
                       {form.role === r.value && (
                         <CheckCircle2 size={16} color="#10B981" strokeWidth={2.5} />
@@ -453,15 +452,14 @@ export function RegisterScreen() {
               type={showPassword ? "text" : "password"}
               placeholder="Min. 8 karakter"
               value={form.password}
-              onChange={(e) => set("password", e.target.value)}
-              style={{ ...inputStyle(submitted && !!errors.password), paddingRight: "44px" }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = "#10B981"; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = submitted && errors.password ? "#EF4444" : "var(--border-subtle)"; }}
+              onChange={(e) => setField("password", e.target.value)}
+              className={`form-input-field ${submitted && errors.password ? "input-error" : ""}`}
+              style={{ paddingRight: "44px" }}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              style={eyeBtn}
+              style={eyeBtnStyle}
             >
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
@@ -505,19 +503,19 @@ export function RegisterScreen() {
               type={showConfirm ? "text" : "password"}
               placeholder="Ulangi kata sandi"
               value={form.confirmPassword}
-              onChange={(e) => set("confirmPassword", e.target.value)}
-              style={{ ...inputStyle(submitted && !!errors.confirmPassword), paddingRight: "44px" }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = "#10B981"; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = submitted && errors.confirmPassword ? "#EF4444" : "var(--border-subtle)"; }}
+              onChange={(e) => setField("confirmPassword", e.target.value)}
+              className={`form-input-field ${submitted && errors.confirmPassword ? "input-error" : ""}`}
+              style={{ paddingRight: "44px" }}
             />
             <button
               type="button"
               onClick={() => setShowConfirm(!showConfirm)}
-              style={eyeBtn}
+              style={eyeBtnStyle}
             >
               {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
+
           {/* Match indicator */}
           {form.confirmPassword.length > 0 && form.password.length > 0 && (
             <motion.div
@@ -551,8 +549,9 @@ export function RegisterScreen() {
             borderRadius: "12px",
             border: `1.5px solid ${submitted && errors.agree ? "#EF4444" : "var(--border-subtle)"}`,
             cursor: "pointer",
+            transition: "border-color 0.2s ease",
           }}
-          onClick={() => set("agree", !form.agree)}
+          onClick={() => setField("agree", !form.agree)}
         >
           <div
             style={{
@@ -578,17 +577,12 @@ export function RegisterScreen() {
             )}
           </div>
           <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>
-            Saya menyetujui{" "}
-            <span style={{ color: "#10B981", fontWeight: 600 }}>Syarat & Ketentuan</span>
-            {" "}serta{" "}
-            <span style={{ color: "#10B981", fontWeight: 600 }}>Kebijakan Privasi</span>
-            {" "}Magetan Greenhouse System.
+            Saya menyetujui <span style={{ color: "#10B981", fontWeight: 600 }}>Syarat & Ketentuan</span> serta{" "}
+            <span style={{ color: "#10B981", fontWeight: 600 }}>Kebijakan Privasi</span> Magetan Greenhouse System.
           </p>
         </div>
         {submitted && errors.agree && (
-          <p style={{ fontSize: "12px", color: "#EF4444", margin: "-6px 0 0 4px" }}>
-            {errors.agree}
-          </p>
+          <p style={{ fontSize: "12px", color: "#EF4444", margin: "-6px 0 0 4px" }}>{errors.agree}</p>
         )}
 
         {/* Submit Button */}
@@ -638,18 +632,11 @@ export function RegisterScreen() {
   );
 }
 
-/* ── Helpers ── */
+/* ── Pure Subcomponents ── */
 
 function SectionLabel({ icon, label }: { icon: string; label: string }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        paddingTop: "4px",
-      }}
-    >
+    <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingTop: "4px" }}>
       <span style={{ fontSize: "14px" }}>{icon}</span>
       <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--icon-muted)", textTransform: "uppercase", letterSpacing: "0.7px" }}>
         {label}
@@ -700,21 +687,7 @@ function FormField({
   );
 }
 
-const inputStyle = (hasError: boolean): React.CSSProperties => ({
-  width: "100%",
-  padding: "13px 16px",
-  borderRadius: "12px",
-  border: `1.5px solid ${hasError ? "#EF4444" : "var(--border-subtle)"}`,
-  background: "var(--bg-input)",
-  fontSize: "14px",
-  color: "var(--text-primary)",
-  outline: "none",
-  fontFamily: "'Inter', sans-serif",
-  boxSizing: "border-box",
-  transition: "border-color 0.2s",
-});
-
-const eyeBtn: React.CSSProperties = {
+const eyeBtnStyle: React.CSSProperties = {
   position: "absolute",
   right: "13px",
   top: "50%",

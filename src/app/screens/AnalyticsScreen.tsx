@@ -10,17 +10,13 @@ import {
 } from "recharts";
 import {
   Download,
+  FileText,
+  RefreshCw,
   Droplets,
   AlertTriangle,
-  Calendar,
   X,
   CheckCircle2,
   Sprout,
-  Activity,
-  Zap,
-  Layers,
-  FileText,
-  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
