@@ -1,6 +1,7 @@
 import { RouterProvider } from "react-router";
 import { ThemeProvider } from "next-themes";
 import { router } from "./routes";
+import { DevPageSwitcher } from "./components/DevPageSwitcher";
 
 export default function App() {
   return (
@@ -28,6 +29,8 @@ export default function App() {
         }}
       >
         <RouterProvider router={router} />
+        {/* Tombol Navigasi Dev: Otomatis HILANG saat build produksi / komersial */}
+        <DevPageSwitcher />
       </div>
     </div>
     </ThemeProvider>
