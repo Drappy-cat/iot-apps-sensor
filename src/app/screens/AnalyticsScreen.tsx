@@ -206,7 +206,7 @@ export function AnalyticsScreen() {
     setIsExportingPDF(true);
     try {
       const activeUser = getActiveUser();
-      const operatorName = activeUser.namaLengkap || activeUser.name || "Operator Lapangan";
+      const operatorName = activeUser.namaLengkap || (activeUser as any).name || "Operator Lapangan";
       generateNPKSoilPDFReport(currentData, activeFilter, operatorName);
       setToastMessage("Laporan PDF resmi berhasil dicetak & diunduh!");
     } catch (err) {

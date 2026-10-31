@@ -10,6 +10,11 @@ import {
   Sparkles,
   RefreshCw,
   Layers,
+  Usb,
+  ChevronRight,
+  Activity,
+  Zap,
+  Waves,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
@@ -189,6 +194,63 @@ export function DashboardScreen() {
       </div>
 
       <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+        {/* Offline USB Serial Monitoring Shortcut Banner */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => navigate("/offline")}
+          style={{
+            background: "var(--bg-card)",
+            borderRadius: "16px",
+            padding: "12px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            boxShadow: "var(--glow-card)",
+            border: "1px solid var(--border-subtle)",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: "rgba(59, 130, 246, 0.12)",
+                color: "#2563EB",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Usb size={18} />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-heading)" }}>
+                  Monitoring Offline USB
+                </span>
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 700,
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                    background: "#DCFCE7",
+                    color: "#16A34A",
+                  }}
+                >
+                  NEW
+                </span>
+              </div>
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "1px 0 0" }}>
+                Baca sensor via kabel USB tanpa koneksi internet
+              </p>
+            </div>
+          </div>
+          <ChevronRight size={18} color="var(--text-muted)" />
+        </motion.div>
+
         {/* Hero Card - Real-time Soil Moisture & Condition */}
         <div
           className="no-invert"

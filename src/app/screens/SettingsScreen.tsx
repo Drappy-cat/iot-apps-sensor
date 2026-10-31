@@ -14,6 +14,7 @@ import {
   RefreshCw,
   BellRing,
   Smartphone,
+  Usb,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
@@ -33,6 +34,11 @@ import {
   hapticWarning,
 } from "../services/hapticsService";
 import { sendTestNotification } from "../services/localNotificationService";
+import {
+  generateRecordId,
+  saveSensorRecord,
+  clearAllLocalRecords,
+} from "../services/indexedDbService";
 
 export function SettingsScreen() {
   const navigate = useNavigate();
@@ -518,6 +524,84 @@ export function SettingsScreen() {
           </div>
         </div>
 
+        {/* Perangkat Keras & Monitoring Offline */}
+        <div>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "var(--icon-muted)",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+            }}
+          >
+            Hardware & Monitoring Offline
+          </p>
+          <div
+            style={{
+              background: "var(--bg-card)",
+              borderRadius: "16px",
+              overflow: "hidden",
+              boxShadow: "0px 2px 8px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div
+              onClick={() => {
+                hapticLight();
+                navigate("/offline");
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 18px",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    background: "rgba(37, 99, 235, 0.12)",
+                    borderRadius: "10px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#2563EB",
+                  }}
+                >
+                  <Usb size={18} strokeWidth={2} />
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                      Monitoring Offline USB
+                    </p>
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        fontWeight: 700,
+                        padding: "1px 5px",
+                        borderRadius: "4px",
+                        background: "#DBEAFE",
+                        color: "#1E40AF",
+                      }}
+                    >
+                      SERIAL
+                    </span>
+                  </div>
+                  <p style={{ fontSize: "12px", color: "var(--icon-muted)", margin: "2px 0 0" }}>
+                    Arduino Uno R3 • Modbus RS485 • IndexedDB
+                  </p>
+                </div>
+              </div>
+              <ChevronRight size={16} color="var(--border-strong)" />
+            </div>
+          </div>
+        </div>
+
         {/* Konfigurasi Firebase Realtime Database */}
         <div>
           <p
@@ -857,6 +941,87 @@ export function SettingsScreen() {
                           <p style={{ fontSize: "13px", fontWeight: 800, color: simMoisture < 60 ? "#22C55E" : "var(--text-muted)" }}>
                             {simMoisture < 60 ? "ON" : "OFF"}
                           </p>
+                        </div>
+                      </div>
+
+                      {/* Alat Pengujian Offline IndexedDB */}
+                      <div
+                        style={{
+                          background: "var(--bg-app)",
+                          borderRadius: "12px",
+                          padding: "12px",
+                          border: "1px solid var(--border-subtle)",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-heading)" }}>
+                            Uji Penyimpanan Offline (IndexedDB)
+                          </span>
+                          <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>Developer Tool</span>
+                        </div>
+                        <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
+                          Kirim nilai slider simulasi di atas sebagai 1 catatan pembacaan serial offline ke IndexedDB.
+                        </p>
+                        <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                          <button
+                            onClick={async () => {
+                              hapticSuccess();
+                              const dummyRecord = {
+                                id: generateRecordId(),
+                                timestamp: Date.now(),
+                                slaveId: 4,
+                                moisture: simMoisture,
+                                temperature: simTemp,
+                                ec: simEC,
+                                ph: simPH,
+                                nitrogen: simN,
+                                phosphorus: simP,
+                                potassium: simK,
+                                status: "OK" as const,
+                                syncStatus: "local" as const,
+                                syncedAt: null,
+                              };
+                              await saveSensorRecord(dummyRecord);
+                              setToastMessage("Berhasil menginjeksi 1 data sensor simulasi ke IndexedDB lokal!");
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "8px 10px",
+                              borderRadius: "8px",
+                              background: "#2563EB",
+                              color: "#FFFFFF",
+                              border: "none",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            + Injeksi ke IndexedDB
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (window.confirm("Kosongkan seluruh data IndexedDB lokal?")) {
+                                hapticWarning();
+                                await clearAllLocalRecords();
+                                setToastMessage("Penyimpanan IndexedDB lokal berhasil dikosongkan!");
+                              }
+                            }}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: "8px",
+                              background: "rgba(239, 68, 68, 0.12)",
+                              color: "#DC2626",
+                              border: "1px solid rgba(239, 68, 68, 0.25)",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Reset IDB
+                          </button>
                         </div>
                       </div>
                     </motion.div>

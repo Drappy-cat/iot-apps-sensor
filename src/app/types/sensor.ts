@@ -31,3 +31,50 @@ export interface FirebaseConfigState {
   appId: string;
   sensorPath: string;
 }
+
+export type SyncStatus = "local" | "pending" | "synced" | "failed";
+
+export type SensorReadingStatus = "OK" | "MODBUS_ERROR" | "PARSE_ERROR" | "TIMEOUT";
+
+export interface ArduinoSerialPacket {
+  slaveId?: number;
+  moisture: number;
+  temperature: number;
+  ec: number;
+  ph: number;
+  nitrogen: number;
+  phosphorus: number;
+  potassium: number;
+  status: string;
+  timestamp?: number;
+}
+
+export interface OfflineSensorRecord {
+  id: string;
+  timestamp: number;
+  slaveId: number;
+  moisture: number;
+  temperature: number;
+  ec: number;
+  ph: number;
+  nitrogen: number;
+  phosphorus: number;
+  potassium: number;
+  status: SensorReadingStatus;
+  syncStatus: SyncStatus;
+  syncedAt?: number | null;
+  errorMessage?: string;
+}
+
+export type SerialConnectionStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "unsupported"
+  | "error";
+
+export interface SerialPortMetadata {
+  usbVendorId?: string;
+  usbProductId?: string;
+  baudRate: number;
+}

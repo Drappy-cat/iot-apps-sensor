@@ -41,9 +41,21 @@ import {
   UserPlus,
   KeyRound,
   RotateCcw,
+  Usb,
+  Database,
+  PlusCircle,
+  Smartphone,
+  Monitor,
+  Tablet,
 } from "lucide-react";
 import { router } from "../routes";
+import { useViewport } from "../context/ViewportContext";
 import { getActiveUser, type User as AuthUser } from "../utils/authHelper";
+import {
+  saveSensorRecord,
+  generateRecordId,
+  clearAllLocalRecords,
+} from "../services/indexedDbService";
 
 // Daftar detail lengkap seluruh halaman di aplikasi
 interface DevRouteItem {
@@ -141,6 +153,23 @@ const DEV_ROUTES: DevRouteItem[] = [
     ],
   },
   {
+    id: "offline",
+    name: "Monitoring Offline (USB)",
+    path: "/offline",
+    category: "iot",
+    categoryLabel: "Monitoring & IoT",
+    icon: Usb,
+    color: "#2563EB",
+    badge: "Web Serial + IDB",
+    description: "Monitoring sensor tanah 7-in-1 via USB Serial (Modbus RTU Slave 4) tanpa internet, simpan ke IndexedDB lokal, dan sinkronkan ke Firebase.",
+    testChecklist: [
+      "Koneksi Web Serial API (Chrome/Edge)",
+      "Pembacaan data realtime dari Arduino Uno R3",
+      "Penyimpanan lokal IndexedDB (tetap ada saat refresh)",
+      "Sinkronisasi Cloud Firebase (status: lokal -> synced)",
+    ],
+  },
+  {
     id: "analytics",
     name: "Riwayat & Analitik Data",
     path: "/analytics",
@@ -224,6 +253,7 @@ function DevPageSwitcherContent() {
   const [position, setPosition] = useState<"bottom-right" | "top-right">("bottom-right");
   const [isMinimized, setIsMinimized] = useState(false);
   const { theme, setTheme } = useTheme();
+  const { viewportMode, setViewportMode, toggleViewportMode } = useViewport();
 
   // Sinkronisasi rute aktif saat berpindah halaman
   useEffect(() => {
@@ -424,7 +454,7 @@ function DevPageSwitcherContent() {
                         fontWeight: 600,
                       }}
                     >
-                      {DEV_ROUTES.findIndex((r) => r.path === currentPath) + 1}/9
+                      {DEV_ROUTES.findIndex((r) => r.path === currentPath) + 1}/{DEV_ROUTES.length}
                     </span>
                   </div>
                   <span
@@ -441,6 +471,37 @@ function DevPageSwitcherContent() {
                     {activeRouteObj?.name || currentPath}
                   </span>
                 </div>
+              </button>
+
+              {/* Tombol Toggle Viewport Cepat (Mobile / Web) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleViewportMode();
+                }}
+                title={`Klik untuk beralih ke mode ${viewportMode === "mobile" ? "Web Desktop (Full 100%)" : "Mobile (430px)"}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: viewportMode === "web"
+                    ? "rgba(56, 189, 248, 0.22)"
+                    : "rgba(129, 140, 248, 0.22)",
+                  border: viewportMode === "web"
+                    ? "1px solid rgba(56, 189, 248, 0.4)"
+                    : "1px solid rgba(129, 140, 248, 0.4)",
+                  borderRadius: "14px",
+                  padding: "3px 8px",
+                  color: viewportMode === "web" ? "#38BDF8" : "#C7D2FE",
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  marginLeft: "2px",
+                }}
+              >
+                {viewportMode === "web" ? <Monitor size={12} /> : <Smartphone size={12} />}
+                <span>{viewportMode === "web" ? "Web" : "Mobile"}</span>
               </button>
 
               {/* Tombol sembunyikan kecil */}
@@ -700,6 +761,65 @@ function DevPageSwitcherContent() {
                   </div>
                 </div>
 
+                {/* Viewport Mode Switcher (Mobile 430px / Tablet 768px / Web Full) */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                    marginTop: "8px",
+                    padding: "6px 12px",
+                    borderRadius: "12px",
+                    background: "rgba(0, 0, 0, 0.3)",
+                    border: "1px solid rgba(255, 255, 255, 0.06)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#94A3B8" }}>
+                    {viewportMode === "web" ? <Monitor size={13} color="#38BDF8" /> : <Smartphone size={13} color="#A78BFA" />}
+                    <span style={{ fontWeight: 600, color: "#F1F5F9" }}>Mode Layar:</span>
+                    <span style={{ fontSize: "10px", color: "#64748B" }}>
+                      ({viewportMode === "mobile" ? "430px" : viewportMode === "tablet" ? "768px" : "100% Full"})
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    {[
+                      { id: "mobile", label: "Mobile", sub: "430px", icon: Smartphone },
+                      { id: "tablet", label: "Tablet", sub: "768px", icon: Tablet },
+                      { id: "web", label: "Web", sub: "Full", icon: Monitor },
+                    ].map((v) => {
+                      const isActive = viewportMode === v.id;
+                      const VIcon = v.icon;
+                      return (
+                        <button
+                          key={v.id}
+                          onClick={() => setViewportMode(v.id as any)}
+                          style={{
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            border: isActive ? "1px solid #38BDF8" : "1px solid rgba(255,255,255,0.08)",
+                            background: isActive ? "rgba(56, 189, 248, 0.25)" : "rgba(255,255,255,0.04)",
+                            color: isActive ? "#38BDF8" : "#94A3B8",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <VIcon size={11} />
+                          <span>{v.label}</span>
+                          <span style={{ fontSize: "9px", opacity: 0.7 }}>{v.sub}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Search Bar & Category Pills */}
                 <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
                   <div
@@ -747,10 +867,10 @@ function DevPageSwitcherContent() {
                   {/* Filter Pills */}
                   <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
                     {[
-                      { id: "all", label: "Semua (9)" },
-                      { id: "auth", label: "🔐 Auth (4)" },
-                      { id: "iot", label: "📊 IoT Monitor (2)" },
-                      { id: "config", label: "⚙️ Konfigurasi (3)" },
+                      { id: "all", label: `Semua (${DEV_ROUTES.length})` },
+                      { id: "auth", label: `🔐 Auth (${DEV_ROUTES.filter((r) => r.category === "auth").length})` },
+                      { id: "iot", label: `📊 IoT Monitor (${DEV_ROUTES.filter((r) => r.category === "iot").length})` },
+                      { id: "config", label: `⚙️ Konfigurasi (${DEV_ROUTES.filter((r) => r.category === "config").length})` },
                     ].map((tab) => {
                       const isActive = activeCategory === tab.id;
                       return (
@@ -774,6 +894,93 @@ function DevPageSwitcherContent() {
                         </button>
                       );
                     })}
+                  </div>
+
+                  {/* Quick Action Tools for Offline Testing */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 10px",
+                      borderRadius: "10px",
+                      background: "rgba(59, 130, 246, 0.12)",
+                      border: "1px solid rgba(59, 130, 246, 0.25)",
+                      fontSize: "11px",
+                      marginTop: "2px",
+                    }}
+                  >
+                    <span style={{ color: "#60A5FA", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Database size={13} /> Dev Offline:
+                    </span>
+                    <button
+                      onClick={async () => {
+                        const randomMoisture = +(60 + Math.random() * 15).toFixed(1);
+                        const dummy = {
+                          id: generateRecordId(),
+                          timestamp: Date.now(),
+                          slaveId: 4,
+                          moisture: randomMoisture,
+                          temperature: +(25 + Math.random() * 5).toFixed(1),
+                          ec: 0,
+                          ph: +(6.5 + Math.random() * 0.5).toFixed(2),
+                          nitrogen: Math.round(40 + Math.random() * 15),
+                          phosphorus: Math.round(30 + Math.random() * 10),
+                          potassium: Math.round(110 + Math.random() * 20),
+                          status: "OK" as const,
+                          syncStatus: "local" as const,
+                          syncedAt: null,
+                        };
+                        await saveSensorRecord(dummy);
+                        alert(`Berhasil menginjeksi 1 data sensor uji ke IndexedDB (Kelembaban: ${randomMoisture}%).`);
+                        if (currentPath === "/offline") {
+                          window.location.reload();
+                        } else {
+                          router.navigate("/offline");
+                          setIsOpen(false);
+                        }
+                      }}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        background: "#2563EB",
+                        color: "#FFFFFF",
+                        border: "none",
+                        fontSize: "10.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <PlusCircle size={12} /> +1 Uji Lokal
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        if (window.confirm("Kosongkan data IndexedDB lokal untuk reset pengujian?")) {
+                          await clearAllLocalRecords();
+                          alert("IndexedDB lokal berhasil dikosongkan!");
+                          if (currentPath === "/offline") {
+                            window.location.reload();
+                          }
+                        }
+                      }}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        background: "rgba(239, 68, 68, 0.2)",
+                        color: "#FCA5A5",
+                        border: "1px solid rgba(239, 68, 68, 0.3)",
+                        fontSize: "10.5px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        marginLeft: "auto",
+                      }}
+                    >
+                      Clear IDB
+                    </button>
                   </div>
                 </div>
               </div>
