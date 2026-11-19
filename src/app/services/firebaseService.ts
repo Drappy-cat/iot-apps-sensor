@@ -50,12 +50,7 @@ export function initFirebase(config: FirebaseConfigState): Database | null {
 
 export const INITIAL_SENSOR_DATA: NPKSensorData = {
   moisture: 65.4,
-  temperature: 26.8,
   ph: 6.7,
-  ec: 1350,
-  nitrogen: 48,
-  phosphorus: 35,
-  potassium: 115,
   timestamp: Date.now(),
 };
 
@@ -70,7 +65,7 @@ export function listenToNPKSensor(
   if (simEnabled || !config.databaseURL) {
     onStatusChange("demo");
     const interval = setInterval(() => {
-      // Realistic micro-fluctuations for NPK Soil Moisture 7-in-1 sensor
+      // Realistic micro-fluctuations for Soil Moisture and pH sensor
       const baseRaw = localStorage.getItem("iot_sim_base_data");
       let base: NPKSensorData = INITIAL_SENSOR_DATA;
       if (baseRaw) {
@@ -84,12 +79,7 @@ export function listenToNPKSensor(
       const noise = (Math.random() - 0.5);
       const simulated: NPKSensorData = {
         moisture: Math.max(10, Math.min(100, +(base.moisture + noise * 0.4).toFixed(1))),
-        temperature: Math.max(15, Math.min(45, +(base.temperature + noise * 0.2).toFixed(1))),
         ph: Math.max(3.5, Math.min(9.5, +(base.ph + noise * 0.05).toFixed(2))),
-        ec: Math.max(200, Math.min(3000, Math.round(base.ec + noise * 10))),
-        nitrogen: Math.max(5, Math.min(200, Math.round(base.nitrogen + noise * 2))),
-        phosphorus: Math.max(5, Math.min(150, Math.round(base.phosphorus + noise * 1.5))),
-        potassium: Math.max(10, Math.min(300, Math.round(base.potassium + noise * 3))),
         timestamp: Date.now(),
       };
 
@@ -117,12 +107,7 @@ export function listenToNPKSensor(
         const val = snapshot.val();
         const parsed: NPKSensorData = {
           moisture: Number(val.moisture ?? val.kelembaban ?? INITIAL_SENSOR_DATA.moisture),
-          temperature: Number(val.temperature ?? val.suhu ?? INITIAL_SENSOR_DATA.temperature),
           ph: Number(val.ph ?? INITIAL_SENSOR_DATA.ph),
-          ec: Number(val.ec ?? INITIAL_SENSOR_DATA.ec),
-          nitrogen: Number(val.nitrogen ?? val.n ?? INITIAL_SENSOR_DATA.nitrogen),
-          phosphorus: Number(val.phosphorus ?? val.p ?? INITIAL_SENSOR_DATA.phosphorus),
-          potassium: Number(val.potassium ?? val.k ?? INITIAL_SENSOR_DATA.potassium),
           timestamp: Number(val.timestamp ?? Date.now()),
         };
         onData(parsed);

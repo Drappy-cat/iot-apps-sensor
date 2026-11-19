@@ -15,44 +15,39 @@ import { BottomNav } from "../components/BottomNav";
 export interface SoilDataPoint {
   time: string;
   moisture: number;
-  suhu: number;
   ph: number;
-  ec: number;
-  n: number;
-  p: number;
-  k: number;
 }
 
 const dataHariIni: SoilDataPoint[] = [
-  { time: "06:00", moisture: 72.0, suhu: 23.1, ph: 6.6, ec: 1250, n: 45, p: 32, k: 110 },
-  { time: "08:00", moisture: 68.5, suhu: 24.5, ph: 6.7, ec: 1300, n: 46, p: 34, k: 112 },
-  { time: "10:00", moisture: 64.2, suhu: 27.2, ph: 6.7, ec: 1350, n: 48, p: 35, k: 115 },
-  { time: "12:00", moisture: 58.0, suhu: 29.8, ph: 6.8, ec: 1420, n: 47, p: 35, k: 116 },
-  { time: "14:00", moisture: 63.4, suhu: 29.1, ph: 6.8, ec: 1390, n: 49, p: 36, k: 118 },
-  { time: "16:00", moisture: 66.8, suhu: 26.5, ph: 6.7, ec: 1340, n: 48, p: 35, k: 115 },
-  { time: "18:00", moisture: 69.1, suhu: 24.8, ph: 6.6, ec: 1310, n: 47, p: 34, k: 114 },
-  { time: "20:00", moisture: 71.0, suhu: 23.9, ph: 6.6, ec: 1280, n: 46, p: 33, k: 112 },
-  { time: "22:00", moisture: 71.8, suhu: 23.2, ph: 6.6, ec: 1260, n: 45, p: 33, k: 111 },
+  { time: "06:00", moisture: 72.0, ph: 6.6 },
+  { time: "08:00", moisture: 68.5, ph: 6.7 },
+  { time: "10:00", moisture: 64.2, ph: 6.7 },
+  { time: "12:00", moisture: 58.0, ph: 6.8 },
+  { time: "14:00", moisture: 63.4, ph: 6.8 },
+  { time: "16:00", moisture: 66.8, ph: 6.7 },
+  { time: "18:00", moisture: 69.1, ph: 6.6 },
+  { time: "20:00", moisture: 71.0, ph: 6.6 },
+  { time: "22:00", moisture: 71.8, ph: 6.6 },
 ];
 
 const data7Hari: SoilDataPoint[] = [
-  { time: "Senin", moisture: 67.2, suhu: 25.4, ph: 6.6, ec: 1320, n: 46, p: 33, k: 112 },
-  { time: "Selasa", moisture: 65.8, suhu: 26.1, ph: 6.7, ec: 1350, n: 48, p: 35, k: 115 },
-  { time: "Rabu", moisture: 69.0, suhu: 24.8, ph: 6.6, ec: 1290, n: 47, p: 34, k: 114 },
-  { time: "Kamis", moisture: 64.5, suhu: 25.9, ph: 6.7, ec: 1380, n: 49, p: 36, k: 118 },
-  { time: "Jumat", moisture: 66.1, suhu: 26.5, ph: 6.8, ec: 1360, n: 48, p: 35, k: 115 },
-  { time: "Sabtu", moisture: 63.8, suhu: 27.2, ph: 6.7, ec: 1410, n: 50, p: 37, k: 120 },
-  { time: "Minggu", moisture: 68.4, suhu: 25.7, ph: 6.6, ec: 1330, n: 47, p: 34, k: 113 },
+  { time: "Senin", moisture: 67.2, ph: 6.6 },
+  { time: "Selasa", moisture: 65.8, ph: 6.7 },
+  { time: "Rabu", moisture: 69.0, ph: 6.6 },
+  { time: "Kamis", moisture: 64.5, ph: 6.7 },
+  { time: "Jumat", moisture: 66.1, ph: 6.8 },
+  { time: "Sabtu", moisture: 63.8, ph: 6.7 },
+  { time: "Minggu", moisture: 68.4, ph: 6.6 },
 ];
 
 const data30Hari: SoilDataPoint[] = [
-  { time: "01 Mei", moisture: 66.4, suhu: 25.1, ph: 6.6, ec: 1310, n: 45, p: 32, k: 110 },
-  { time: "05 Mei", moisture: 65.1, suhu: 25.4, ph: 6.7, ec: 1340, n: 47, p: 34, k: 114 },
-  { time: "10 Mei", moisture: 63.8, suhu: 26.2, ph: 6.7, ec: 1380, n: 49, p: 36, k: 118 },
-  { time: "15 Mei", moisture: 67.0, suhu: 25.8, ph: 6.6, ec: 1320, n: 46, p: 33, k: 112 },
-  { time: "20 Mei", moisture: 68.5, suhu: 24.9, ph: 6.6, ec: 1300, n: 48, p: 35, k: 115 },
-  { time: "25 Mei", moisture: 64.2, suhu: 26.7, ph: 6.8, ec: 1400, n: 51, p: 38, k: 122 },
-  { time: "30 Mei", moisture: 66.0, suhu: 26.0, ph: 6.7, ec: 1350, n: 48, p: 35, k: 115 },
+  { time: "01 Mei", moisture: 66.4, ph: 6.6 },
+  { time: "05 Mei", moisture: 65.1, ph: 6.7 },
+  { time: "10 Mei", moisture: 63.8, ph: 6.7 },
+  { time: "15 Mei", moisture: 67.0, ph: 6.6 },
+  { time: "20 Mei", moisture: 68.5, ph: 6.6 },
+  { time: "25 Mei", moisture: 64.2, ph: 6.8 },
+  { time: "30 Mei", moisture: 66.0, ph: 6.7 },
 ];
 
 export function getFilteredData(filter: string): SoilDataPoint[] {
@@ -78,7 +73,7 @@ const activityLog = [
     iconColor: "#F97316",
     iconBg: "#FFF7ED",
     time: "11:30 WIB",
-    desc: "Unsur Nitrogen terdeteksi 28 mg/kg (sedikit di bawah target ideal).",
+    desc: "Nilai pH tanah sempat menyentuh 5.8 (sedikit masam). Dosing pengkondisi pH diaktifkan.",
     type: "warning",
   },
   {
@@ -87,7 +82,7 @@ const activityLog = [
     iconColor: "var(--text-muted)",
     iconBg: "var(--bg-app)",
     time: "06:15 WIB",
-    desc: "Penyiraman nutrisi otomatis selesai. pH tanah stabil di angka 6.7.",
+    desc: "Siklus monitoring pagi selesai. Kelembaban 72% dan pH tanah stabil di angka 6.6 (Netral Ideal).",
     type: "info",
   },
 ];
@@ -95,9 +90,9 @@ const activityLog = [
 const filters = ["Hari Ini", "7 Hari", "30 Hari", "Lainnya"];
 const activityFilters = ["Semua", "Peringatan", "Sukses", "Info"];
 const chartModes = [
-  { id: "moisture_temp", label: "Kelembaban & Suhu" },
-  { id: "npk", label: "Unsur NPK" },
-  { id: "ph_ec", label: "pH & EC" },
+  { id: "all", label: "Kelembaban & pH" },
+  { id: "moisture", label: "Kelembaban" },
+  { id: "ph", label: "pH Tanah" },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -125,8 +120,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               }}
             />
             <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-              {p.name.toUpperCase()}: {p.value}
-              {p.name === "suhu" ? "°C" : p.name === "moisture" ? "%" : p.name === "ec" ? " µS" : p.name === "ph" ? "" : " mg/kg"}
+              {p.name === "moisture" ? "Kelembaban" : "pH Tanah"}: {p.value}
+              {p.name === "moisture" ? "%" : ""}
             </span>
           </div>
         ))}
@@ -138,7 +133,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export function AnalyticsScreen() {
   const [activeFilter, setActiveFilter] = useState(() => localStorage.getItem("iot_analytics_filter") || "Hari Ini");
-  const [activeChartMode, setActiveChartMode] = useState<"moisture_temp" | "npk" | "ph_ec">("moisture_temp");
+  const [activeChartMode, setActiveChartMode] = useState<"all" | "moisture" | "ph">("all");
   const [activeActivityFilter, setActiveActivityFilter] = useState(() => localStorage.getItem("iot_analytics_activity_filter") || "Semua");
   const [isDateModalOpen, setDateModalOpen] = useState(false);
   const [startDate, setStartDate] = useState("");
@@ -147,7 +142,7 @@ export function AnalyticsScreen() {
 
   const currentData = getFilteredData(activeFilter);
   const avgMoisture = (currentData.reduce((acc, curr) => acc + curr.moisture, 0) / currentData.length).toFixed(1);
-  const avgTemp = (currentData.reduce((acc, curr) => acc + curr.suhu, 0) / currentData.length).toFixed(1);
+  const avgPH = (currentData.reduce((acc, curr) => acc + curr.ph, 0) / currentData.length).toFixed(2);
 
   let totalActivations = 12;
   if (activeFilter === "Hari Ini") totalActivations = 4;
@@ -158,9 +153,9 @@ export function AnalyticsScreen() {
   useEffect(() => { localStorage.setItem("iot_analytics_activity_filter", activeActivityFilter); }, [activeActivityFilter]);
 
   const handleExportCSV = () => {
-    let csvContent = "Waktu,Kelembaban (%),Suhu Tanah (°C),pH Tanah,EC (uS/cm),Nitrogen (mg/kg),Fosfor (mg/kg),Kalium (mg/kg)\n";
+    let csvContent = "Waktu,Kelembaban (%),pH Tanah\n";
     currentData.forEach(row => {
-      csvContent += `${row.time},${row.moisture},${row.suhu},${row.ph},${row.ec},${row.n},${row.p},${row.k}\n`;
+      csvContent += `${row.time},${row.moisture},${row.ph}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -168,7 +163,7 @@ export function AnalyticsScreen() {
     
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Riwayat_NPK_${activeFilter.replace(/\s+/g, "_")}.csv`);
+    link.setAttribute("download", `Riwayat_Sensor_${activeFilter.replace(/\s+/g, "_")}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -213,7 +208,7 @@ export function AnalyticsScreen() {
         }}
       >
         <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
-          Riwayat & Analitik NPK
+          Riwayat & Analitik Sensor
         </span>
       </div>
 
@@ -291,22 +286,6 @@ export function AnalyticsScreen() {
                     <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.4} />
                     <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorN" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorP" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EA580C" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#EA580C" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorK" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
-                  </linearGradient>
                   <linearGradient id="colorPH" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
                     <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
@@ -317,25 +296,19 @@ export function AnalyticsScreen() {
                 <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
 
-                {activeChartMode === "moisture_temp" && (
+                {activeChartMode === "all" && (
                   <>
-                    <Area type="monotone" dataKey="moisture" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMoisture)" />
-                    <Area type="monotone" dataKey="suhu" stroke="#F97316" strokeWidth={2.5} fillOpacity={1} fill="url(#colorTemp)" />
+                    <Area type="monotone" dataKey="moisture" name="moisture" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMoisture)" />
+                    <Area type="monotone" dataKey="ph" name="ph" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorPH)" />
                   </>
                 )}
 
-                {activeChartMode === "npk" && (
-                  <>
-                    <Area type="monotone" dataKey="n" stroke="#2563EB" strokeWidth={2.5} fillOpacity={1} fill="url(#colorN)" />
-                    <Area type="monotone" dataKey="p" stroke="#EA580C" strokeWidth={2.5} fillOpacity={1} fill="url(#colorP)" />
-                    <Area type="monotone" dataKey="k" stroke="#7C3AED" strokeWidth={2.5} fillOpacity={1} fill="url(#colorK)" />
-                  </>
+                {activeChartMode === "moisture" && (
+                  <Area type="monotone" dataKey="moisture" name="moisture" stroke="#3B82F6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMoisture)" />
                 )}
 
-                {activeChartMode === "ph_ec" && (
-                  <>
-                    <Area type="monotone" dataKey="ph" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorPH)" />
-                  </>
+                {activeChartMode === "ph" && (
+                  <Area type="monotone" dataKey="ph" name="ph" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorPH)" />
                 )}
               </AreaChart>
             </ResponsiveContainer>
@@ -368,12 +341,12 @@ export function AnalyticsScreen() {
               boxShadow: "var(--glow-card)",
             }}
           >
-            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Rata-rata Suhu</p>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px" }}>Rata-rata pH Tanah</p>
             <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
-              <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{avgTemp}</span>
-              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>°C</span>
+              <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{avgPH}</span>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>pH</span>
             </div>
-            <span style={{ fontSize: "11px", color: "#16A34A", fontWeight: 600 }}>Zona Ideal Perakaran</span>
+            <span style={{ fontSize: "11px", color: "#16A34A", fontWeight: 600 }}>Kondisi Netral Optimal</span>
           </div>
         </div>
 

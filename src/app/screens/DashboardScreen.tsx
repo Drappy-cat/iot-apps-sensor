@@ -3,19 +3,17 @@ import { useNavigate } from "react-router";
 import {
   Bell,
   Droplets,
-  Thermometer,
   Sprout,
   Activity,
-  Zap,
-  Layers,
-  FlaskConical,
   Wifi,
   Sparkles,
   Waves,
   RefreshCw,
+  Camera,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
+import { FieldCameraCard } from "../components/FieldCameraCard";
 import { getActiveUser } from "../utils/authHelper";
 import { useSensorData } from "../hooks/useSensorData";
 
@@ -227,9 +225,9 @@ export function DashboardScreen() {
                 <span style={{ fontSize: "28px", fontWeight: 600, marginTop: "10px", opacity: 0.9 }}>%</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px" }}>
-                <Thermometer size={15} style={{ opacity: 0.85 }} />
+                <Activity size={15} style={{ opacity: 0.85 }} />
                 <span style={{ fontSize: "14px", fontWeight: 500, opacity: 0.9 }}>
-                  Suhu Tanah {sensorData.temperature.toFixed(1)}°C
+                  Tingkat Keasaman: pH {sensorData.ph.toFixed(1)} ({analysis.phStatus})
                 </span>
               </div>
             </div>
@@ -481,274 +479,129 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* 7-in-1 Sensor Parameters Grid */}
+        {/* Sensor Parameters Grid - Hanya pH dan Kelembaban Tanah */}
         <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
             <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
-              Parameter Sensor NPK 7-in-1
+              Parameter Sensor Tanah
             </p>
             <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--icon-muted)" }}>
               Data Modbus RS485
             </span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-            {/* Nitrogen (N) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            {/* Kelembaban Tanah */}
             <div
               style={{
                 background: "var(--bg-card)",
-                borderRadius: "16px",
-                padding: "14px",
+                borderRadius: "18px",
+                padding: "16px",
                 boxShadow: "var(--glow-card)",
                 display: "flex",
                 flexDirection: "column",
-                gap: "6px",
+                gap: "8px",
+                border: "1px solid var(--border-card)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                  Nitrogen (N)
+                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  Kelembaban Tanah
                 </span>
                 <div
                   style={{
                     background: "#EFF6FF",
-                    borderRadius: "8px",
-                    padding: "4px",
+                    borderRadius: "10px",
+                    padding: "6px",
                     color: "#2563EB",
                   }}
                 >
-                  <Sparkles size={14} />
+                  <Droplets size={16} />
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
-                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
-                  {sensorData.nitrogen}
+              <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <span style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-primary)" }}>
+                  {sensorData.moisture.toFixed(1)}
                 </span>
-                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>mg/kg</span>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--icon-muted)" }}>%</span>
               </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: sensorData.nitrogen < 30 ? "#EA580C" : "#16A34A",
-                }}
-              >
-                {sensorData.nitrogen < 30 ? "Rendah" : "Optimal"}
-              </span>
-            </div>
-
-            {/* Fosfor (P) */}
-            <div
-              style={{
-                background: "var(--bg-card)",
-                borderRadius: "16px",
-                padding: "14px",
-                boxShadow: "var(--glow-card)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                  Fosfor (P)
-                </span>
-                <div
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                <span
                   style={{
-                    background: "#FFF7ED",
-                    borderRadius: "8px",
-                    padding: "4px",
-                    color: "#EA580C",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    padding: "2px 8px",
+                    borderRadius: "6px",
+                    background:
+                      analysis.moistureStatus === "OPTIMAL"
+                        ? "rgba(34, 197, 94, 0.15)"
+                        : "rgba(249, 115, 22, 0.15)",
+                    color: analysis.moistureStatus === "OPTIMAL" ? "#16A34A" : "#EA580C",
                   }}
                 >
-                  <FlaskConical size={14} />
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
-                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
-                  {sensorData.phosphorus}
+                  {analysis.moistureStatus === "OPTIMAL" ? "Optimal" : analysis.moistureStatus === "KERING" ? "Kering" : "Basah"}
                 </span>
-                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>mg/kg</span>
+                <span style={{ fontSize: "10.5px", color: "var(--icon-muted)" }}>50 - 80%</span>
               </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: sensorData.phosphorus < 20 ? "#EA580C" : "#16A34A",
-                }}
-              >
-                {sensorData.phosphorus < 20 ? "Rendah" : "Optimal"}
-              </span>
-            </div>
-
-            {/* Kalium (K) */}
-            <div
-              style={{
-                background: "var(--bg-card)",
-                borderRadius: "16px",
-                padding: "14px",
-                boxShadow: "var(--glow-card)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                  Kalium (K)
-                </span>
-                <div
-                  style={{
-                    background: "#F5F3FF",
-                    borderRadius: "8px",
-                    padding: "4px",
-                    color: "#7C3AED",
-                  }}
-                >
-                  <Layers size={14} />
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
-                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
-                  {sensorData.potassium}
-                </span>
-                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>mg/kg</span>
-              </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: sensorData.potassium < 70 ? "#EA580C" : "#16A34A",
-                }}
-              >
-                {sensorData.potassium < 70 ? "Rendah" : "Optimal"}
-              </span>
             </div>
 
             {/* pH Tanah */}
             <div
               style={{
                 background: "var(--bg-card)",
-                borderRadius: "16px",
-                padding: "14px",
+                borderRadius: "18px",
+                padding: "16px",
                 boxShadow: "var(--glow-card)",
                 display: "flex",
                 flexDirection: "column",
-                gap: "6px",
+                gap: "8px",
+                border: "1px solid var(--border-card)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>
                   pH Tanah
                 </span>
                 <div
                   style={{
                     background: "#ECFDF5",
-                    borderRadius: "8px",
-                    padding: "4px",
+                    borderRadius: "10px",
+                    padding: "6px",
                     color: "#059669",
                   }}
                 >
-                  <Activity size={14} />
+                  <Activity size={16} />
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
-                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                <span style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-primary)" }}>
                   {sensorData.ph.toFixed(1)}
                 </span>
-                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>pH</span>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--icon-muted)" }}>pH</span>
               </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: sensorData.ph < 6 ? "#EA580C" : sensorData.ph > 7.5 ? "#2563EB" : "#16A34A",
-                }}
-              >
-                {sensorData.ph < 6 ? "Masam" : sensorData.ph > 7.5 ? "Basa" : "Netral (Ideal)"}
-              </span>
-            </div>
-
-            {/* Konduktivitas EC */}
-            <div
-              style={{
-                background: "var(--bg-card)",
-                borderRadius: "16px",
-                padding: "14px",
-                boxShadow: "var(--glow-card)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                  EC (Salinitas)
-                </span>
-                <div
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                <span
                   style={{
-                    background: "#F0FDFA",
-                    borderRadius: "8px",
-                    padding: "4px",
-                    color: "#0D9488",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    padding: "2px 8px",
+                    borderRadius: "6px",
+                    background:
+                      analysis.phStatus === "NETRAL"
+                        ? "rgba(34, 197, 94, 0.15)"
+                        : "rgba(249, 115, 22, 0.15)",
+                    color:
+                      analysis.phStatus === "NETRAL"
+                        ? "#16A34A"
+                        : analysis.phStatus === "ASAM"
+                        ? "#EA580C"
+                        : "#2563EB",
                   }}
                 >
-                  <Zap size={14} />
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
-                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
-                  {sensorData.ec.toLocaleString()}
+                  {sensorData.ph < 6 ? "Masam" : sensorData.ph > 7.5 ? "Basa" : "Netral (Ideal)"}
                 </span>
-                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>µS/cm</span>
+                <span style={{ fontSize: "10.5px", color: "var(--icon-muted)" }}>6.0 - 7.0</span>
               </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: sensorData.ec > 2000 ? "#DC2626" : "#16A34A",
-                }}
-              >
-                {sensorData.ec > 2000 ? "Salinitas Tinggi" : "Ideal"}
-              </span>
-            </div>
-
-            {/* Suhu Tanah */}
-            <div
-              style={{
-                background: "var(--bg-card)",
-                borderRadius: "16px",
-                padding: "14px",
-                boxShadow: "var(--glow-card)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                  Suhu Tanah
-                </span>
-                <div
-                  style={{
-                    background: "#FFF1F2",
-                    borderRadius: "8px",
-                    padding: "4px",
-                    color: "#E11D48",
-                  }}
-                >
-                  <Thermometer size={14} />
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "3px" }}>
-                <span style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)" }}>
-                  {sensorData.temperature.toFixed(1)}
-                </span>
-                <span style={{ fontSize: "11px", color: "var(--icon-muted)" }}>°C</span>
-              </div>
-              <span style={{ fontSize: "11px", fontWeight: 600, color: "#16A34A" }}>
-                Normal Perakaran
-              </span>
             </div>
           </div>
         </div>
@@ -811,7 +664,7 @@ export function DashboardScreen() {
               </span>
             </div>
 
-            {/* Dosing Pupuk NPK */}
+            {/* Pengkondisi / Dosing pH */}
             <div
               onClick={activeUser.role !== "viewer" ? toggleFertilizer : handleBlockedAction}
               style={{
@@ -841,10 +694,10 @@ export function DashboardScreen() {
                   transition: "background 0.3s",
                 }}
               >
-                <FlaskConical size={26} color={fertilizerOn ? "#F97316" : "var(--text-muted)"} strokeWidth={1.8} />
+                <Activity size={26} color={fertilizerOn ? "#F97316" : "var(--text-muted)"} strokeWidth={1.8} />
               </div>
               <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", textAlign: "center" }}>
-                Katup Nutrisi NPK
+                Dosing Pengatur pH
               </span>
               <span
                 className="no-invert"
@@ -864,6 +717,9 @@ export function DashboardScreen() {
             </div>
           </div>
         </div>
+
+        {/* Fitur Akses Kamera Lapangan Langsung (di bagian bawah) */}
+        <FieldCameraCard sensorData={sensorData} />
       </div>
 
       {/* Toast Notification */}

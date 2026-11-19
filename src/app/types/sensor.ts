@@ -1,11 +1,6 @@
 export interface NPKSensorData {
   moisture: number;      // % (Kelembaban tanah)
-  temperature: number;   // °C (Suhu tanah)
   ph: number;            // pH (0 - 14)
-  ec: number;            // µS/cm (Konduktivitas listrik)
-  nitrogen: number;      // mg/kg (Nitrogen N)
-  phosphorus: number;    // mg/kg (Fosfor P)
-  potassium: number;     // mg/kg (Kalium K)
   timestamp?: number;    // epoch ms
 }
 

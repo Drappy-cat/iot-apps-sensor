@@ -50,14 +50,9 @@ export function SettingsScreen() {
     return saved !== null ? saved === "true" : true;
   });
 
-  // NPK 7-in-1 Simulation parameters
+  // Simulation parameters (Hanya Kelembaban dan pH)
   const [simMoisture, setSimMoisture] = useState(65);
-  const [simTemp, setSimTemp] = useState(27);
   const [simPH, setSimPH] = useState(6.7);
-  const [simEC, setSimEC] = useState(1350);
-  const [simN, setSimN] = useState(48);
-  const [simP, setSimP] = useState(35);
-  const [simK, setSimK] = useState(115);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SIM_ENABLED, simEnabled.toString());
@@ -66,16 +61,11 @@ export function SettingsScreen() {
   useEffect(() => {
     const dataToSave = {
       moisture: simMoisture,
-      temperature: simTemp,
       ph: simPH,
-      ec: simEC,
-      nitrogen: simN,
-      phosphorus: simP,
-      potassium: simK,
       timestamp: Date.now(),
     };
     localStorage.setItem("iot_sim_base_data", JSON.stringify(dataToSave));
-  }, [simMoisture, simTemp, simPH, simEC, simN, simP, simK]);
+  }, [simMoisture, simPH]);
 
   const handleSaveFirebase = () => {
     saveFirebaseConfig(fbConfig);
@@ -613,26 +603,6 @@ export function SettingsScreen() {
                         />
                       </div>
 
-                      {/* Suhu Tanah */}
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                            Suhu Tanah
-                          </span>
-                          <span style={{ background: "#FFF7ED", color: "#F97316", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
-                            {simTemp}°C
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={15}
-                          max={45}
-                          value={simTemp}
-                          onChange={(e) => setSimTemp(Number(e.target.value))}
-                          style={{ width: "100%", accentColor: "#F97316", height: "6px", cursor: "pointer" }}
-                        />
-                      </div>
-
                       {/* pH Tanah */}
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
@@ -651,26 +621,6 @@ export function SettingsScreen() {
                           value={simPH}
                           onChange={(e) => setSimPH(Number(e.target.value))}
                           style={{ width: "100%", accentColor: "#059669", height: "6px", cursor: "pointer" }}
-                        />
-                      </div>
-
-                      {/* Nitrogen N */}
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                            Nitrogen (N)
-                          </span>
-                          <span style={{ background: "#EFF6FF", color: "#2563EB", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
-                            {simN} mg/kg
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={5}
-                          max={150}
-                          value={simN}
-                          onChange={(e) => setSimN(Number(e.target.value))}
-                          style={{ width: "100%", accentColor: "#2563EB", height: "6px", cursor: "pointer" }}
                         />
                       </div>
 
