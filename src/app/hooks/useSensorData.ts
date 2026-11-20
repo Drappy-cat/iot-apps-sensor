@@ -5,7 +5,10 @@ import {
   INITIAL_SENSOR_DATA,
   getSavedFirebaseConfig,
   saveFirebaseConfig,
-  STORAGE_KEY_SIM_ENABLED,
+  updateActuatorControlInFirebase,
+  getSavedSensorMode,
+  saveSensorMode,
+  type SensorMode,
 } from "../services/firebaseService";
 import { analyzeSoilData } from "../utils/soilAnalyzer";
 
@@ -13,6 +16,7 @@ export function useSensorData() {
   const [sensorData, setSensorData] = useState<NPKSensorData>(INITIAL_SENSOR_DATA);
   const [connectionStatus, setConnectionStatus] = useState<"live" | "demo" | "connecting" | "error">("demo");
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfigState>(getSavedFirebaseConfig);
+  const [sensorMode, setSensorModeState] = useState<SensorMode>(getSavedSensorMode);
 
   const [setpoint, setSetpoint] = useState<number>(() => {
     const saved = localStorage.getItem("iot_setpoint_moisture");
@@ -25,6 +29,22 @@ export function useSensorData() {
   useEffect(() => {
     localStorage.setItem("iot_setpoint_moisture", setpoint.toString());
   }, [setpoint]);
+
+  // Listen to sensorMode changes across components/tabs
+  useEffect(() => {
+    const syncMode = () => setSensorModeState(getSavedSensorMode());
+    window.addEventListener("iot-sensor-mode-changed", syncMode);
+    window.addEventListener("storage", syncMode);
+    return () => {
+      window.removeEventListener("iot-sensor-mode-changed", syncMode);
+      window.removeEventListener("storage", syncMode);
+    };
+  }, []);
+
+  const updateSensorMode = useCallback((mode: SensorMode) => {
+    saveSensorMode(mode);
+    setSensorModeState(mode);
+  }, []);
 
   // Subscribe to Firebase RTDB or simulated fallback
   useEffect(() => {
@@ -40,12 +60,25 @@ export function useSensorData() {
   }, [firebaseConfig]);
 
   const analysis: SoilAnalysis = useMemo(() => {
-    return analyzeSoilData(sensorData, setpoint);
-  }, [sensorData, setpoint]);
+    return analyzeSoilData(sensorData, setpoint, sensorMode);
+  }, [sensorData, setpoint, sensorMode]);
 
   // Actuator statuses: manual override takes precedence, otherwise automated intelligence
   const irrigationOn = manualIrrigation !== null ? manualIrrigation : analysis.irrigationNeeded;
   const fertilizerOn = manualFertilizer !== null ? manualFertilizer : analysis.fertilizerNeeded;
+
+  // Write-back actuator control & setpoint state to Firebase RTDB (/actuator_control) when live
+  useEffect(() => {
+    if (connectionStatus !== "live") return;
+    const mode = manualIrrigation !== null || manualFertilizer !== null ? "manual" : "auto";
+    updateActuatorControlInFirebase({
+      irrigationOn,
+      fertilizerOn,
+      setpointMoisture: setpoint,
+      mode,
+      updatedAt: Date.now(),
+    });
+  }, [irrigationOn, fertilizerOn, setpoint, manualIrrigation, manualFertilizer, connectionStatus]);
 
   const toggleIrrigation = useCallback(() => {
     setManualIrrigation((prev) => (prev !== null ? !prev : !analysis.irrigationNeeded));
@@ -72,5 +105,7 @@ export function useSensorData() {
     toggleFertilizer,
     firebaseConfig,
     updateConfig,
+    sensorMode,
+    updateSensorMode,
   };
 }

@@ -15,6 +15,25 @@ export const DEFAULT_FIREBASE_CONFIG: FirebaseConfigState = {
 
 export const STORAGE_KEY_FIREBASE = "iot_firebase_config";
 export const STORAGE_KEY_SIM_ENABLED = "iot_settings_sim_enabled";
+export const STORAGE_KEY_SENSOR_MODE = "iot_sensor_mode";
+
+export type SensorMode = "focused" | "full_npk";
+
+export function getSavedSensorMode(): SensorMode {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_SENSOR_MODE);
+    return saved === "full_npk" ? "full_npk" : "focused";
+  } catch {
+    return "focused";
+  }
+}
+
+export function saveSensorMode(mode: SensorMode): void {
+  localStorage.setItem(STORAGE_KEY_SENSOR_MODE, mode);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("iot-sensor-mode-changed"));
+  }
+}
 
 export function getSavedFirebaseConfig(): FirebaseConfigState {
   try {
@@ -50,7 +69,12 @@ export function initFirebase(config: FirebaseConfigState): Database | null {
 
 export const INITIAL_SENSOR_DATA: NPKSensorData = {
   moisture: 65.4,
+  temperature: 26.8,
   ph: 6.7,
+  ec: 1350,
+  nitrogen: 48,
+  phosphorus: 35,
+  potassium: 115,
   timestamp: Date.now(),
 };
 
@@ -65,21 +89,25 @@ export function listenToNPKSensor(
   if (simEnabled || !config.databaseURL) {
     onStatusChange("demo");
     const interval = setInterval(() => {
-      // Realistic micro-fluctuations for Soil Moisture and pH sensor
       const baseRaw = localStorage.getItem("iot_sim_base_data");
       let base: NPKSensorData = INITIAL_SENSOR_DATA;
       if (baseRaw) {
         try {
-          base = JSON.parse(baseRaw);
+          base = { ...INITIAL_SENSOR_DATA, ...JSON.parse(baseRaw) };
         } catch (e) {
           // ignore
         }
       }
 
-      const noise = (Math.random() - 0.5);
+      const noise = Math.random() - 0.5;
       const simulated: NPKSensorData = {
         moisture: Math.max(10, Math.min(100, +(base.moisture + noise * 0.4).toFixed(1))),
+        temperature: Math.max(15, Math.min(45, +((base.temperature ?? 26.8) + noise * 0.2).toFixed(1))),
         ph: Math.max(3.5, Math.min(9.5, +(base.ph + noise * 0.05).toFixed(2))),
+        ec: Math.max(200, Math.min(3000, Math.round((base.ec ?? 1350) + noise * 10))),
+        nitrogen: Math.max(5, Math.min(200, Math.round((base.nitrogen ?? 48) + noise * 2))),
+        phosphorus: Math.max(5, Math.min(150, Math.round((base.phosphorus ?? 35) + noise * 1.5))),
+        potassium: Math.max(10, Math.min(300, Math.round((base.potassium ?? 115) + noise * 3))),
         timestamp: Date.now(),
       };
 
@@ -107,7 +135,12 @@ export function listenToNPKSensor(
         const val = snapshot.val();
         const parsed: NPKSensorData = {
           moisture: Number(val.moisture ?? val.kelembaban ?? INITIAL_SENSOR_DATA.moisture),
+          temperature: Number(val.temperature ?? val.suhu ?? INITIAL_SENSOR_DATA.temperature),
           ph: Number(val.ph ?? INITIAL_SENSOR_DATA.ph),
+          ec: Number(val.ec ?? INITIAL_SENSOR_DATA.ec),
+          nitrogen: Number(val.nitrogen ?? val.n ?? INITIAL_SENSOR_DATA.nitrogen),
+          phosphorus: Number(val.phosphorus ?? val.p ?? INITIAL_SENSOR_DATA.phosphorus),
+          potassium: Number(val.potassium ?? val.k ?? INITIAL_SENSOR_DATA.potassium),
           timestamp: Number(val.timestamp ?? Date.now()),
         };
         onData(parsed);
@@ -125,4 +158,38 @@ export function listenToNPKSensor(
   return () => {
     off(sensorRef);
   };
+}
+
+export interface ActuatorControlPayload {
+  irrigationOn: boolean;
+  fertilizerOn: boolean;
+  setpointMoisture: number;
+  mode: "auto" | "manual";
+  updatedAt: number;
+}
+
+/**
+ * Menulis balik (write-back) status aktuator & setpoint ke node /actuator_control di Firebase RTDB
+ * agar mikrokontroler (ESP32) di lapangan dapat mengeksekusi relay pompa secara real-time.
+ */
+export async function updateActuatorControlInFirebase(
+  payload: ActuatorControlPayload
+): Promise<boolean> {
+  const config = getSavedFirebaseConfig();
+  const simEnabled = localStorage.getItem(STORAGE_KEY_SIM_ENABLED) === "true";
+
+  if (simEnabled || !config.databaseURL || !config.apiKey) {
+    return false;
+  }
+
+  try {
+    const db = initFirebase(config);
+    if (!db) return false;
+    const actuatorRef = ref(db, "actuator_control");
+    await set(actuatorRef, payload);
+    return true;
+  } catch (err) {
+    console.warn("Gagal menyinkronkan status aktuator ke Firebase RTDB:", err);
+    return false;
+  }
 }

@@ -12,6 +12,10 @@ import {
   Waves,
   Usb,
   ChevronRight,
+  Thermometer,
+  Zap,
+  FlaskConical,
+  Layers,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
@@ -36,6 +40,8 @@ export function DashboardScreen() {
     fertilizerOn,
     toggleIrrigation,
     toggleFertilizer,
+    sensorMode,
+    updateSensorMode,
   } = useSensorData();
 
   const decrement = () => {
@@ -552,15 +558,61 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* Sensor Parameters Grid - Hanya pH dan Kelembaban Tanah */}
+        {/* Sensor Parameters Grid - Mode Fokus (2 Parameter) vs Mode Lengkap (NPK 7-in-1) */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "6px" }}>
             <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
               Parameter Sensor Tanah
             </p>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--icon-muted)" }}>
-              Data Modbus RS485
-            </span>
+            <div
+              style={{
+                display: "flex",
+                gap: "4px",
+                background: "var(--bg-hover)",
+                padding: "2px",
+                borderRadius: "10px",
+                border: "1px solid var(--border-subtle)",
+              }}
+            >
+              <button
+                onClick={() => {
+                  hapticMedium();
+                  updateSensorMode("focused");
+                }}
+                style={{
+                  background: sensorMode === "focused" ? "var(--bg-card)" : "transparent",
+                  color: sensorMode === "focused" ? "#2563EB" : "var(--text-muted)",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "3px 8px",
+                  fontSize: "10.5px",
+                  fontWeight: sensorMode === "focused" ? 700 : 500,
+                  cursor: "pointer",
+                  boxShadow: sensorMode === "focused" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                Fokus (2)
+              </button>
+              <button
+                onClick={() => {
+                  hapticMedium();
+                  updateSensorMode("full_npk");
+                }}
+                style={{
+                  background: sensorMode === "full_npk" ? "var(--bg-card)" : "transparent",
+                  color: sensorMode === "full_npk" ? "#059669" : "var(--text-muted)",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "3px 8px",
+                  fontSize: "10.5px",
+                  fontWeight: sensorMode === "full_npk" ? 700 : 500,
+                  cursor: "pointer",
+                  boxShadow: sensorMode === "full_npk" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                NPK 7-in-1
+              </button>
+            </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -676,6 +728,242 @@ export function DashboardScreen() {
                 <span style={{ fontSize: "10.5px", color: "var(--icon-muted)" }}>6.0 - 7.0</span>
               </div>
             </div>
+
+            {sensorMode === "full_npk" && (
+              <>
+                {/* Suhu Tanah */}
+                <div
+                  style={{
+                    background: "var(--bg-card)",
+                    borderRadius: "18px",
+                    padding: "16px",
+                    boxShadow: "var(--glow-card)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    border: "1px solid var(--border-card)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                      Suhu Tanah
+                    </span>
+                    <div style={{ background: "#E0F2FE", borderRadius: "10px", padding: "6px", color: "#0284C7" }}>
+                      <Thermometer size={16} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-primary)" }}>
+                      {(sensorData.temperature ?? 26.8).toFixed(1)}
+                    </span>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--icon-muted)" }}>°C</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: (sensorData.temperature ?? 26.8) <= 32 ? "rgba(34, 197, 94, 0.15)" : "rgba(249, 115, 22, 0.15)",
+                        color: (sensorData.temperature ?? 26.8) <= 32 ? "#16A34A" : "#EA580C",
+                      }}
+                    >
+                      {(sensorData.temperature ?? 26.8) <= 32 ? "Ideal" : "Panas"}
+                    </span>
+                    <span style={{ fontSize: "10.5px", color: "var(--icon-muted)" }}>20 - 30°C</span>
+                  </div>
+                </div>
+
+                {/* Konduktivitas EC */}
+                <div
+                  style={{
+                    background: "var(--bg-card)",
+                    borderRadius: "18px",
+                    padding: "16px",
+                    boxShadow: "var(--glow-card)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    border: "1px solid var(--border-card)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                      Konduktivitas EC
+                    </span>
+                    <div style={{ background: "#FEF3C7", borderRadius: "10px", padding: "6px", color: "#D97706" }}>
+                      <Zap size={16} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-primary)" }}>
+                      {sensorData.ec ?? 1350}
+                    </span>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--icon-muted)" }}>µS/cm</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background:
+                          (sensorData.ec ?? 1350) >= 700 && (sensorData.ec ?? 1350) <= 2000
+                            ? "rgba(34, 197, 94, 0.15)"
+                            : "rgba(249, 115, 22, 0.15)",
+                        color:
+                          (sensorData.ec ?? 1350) >= 700 && (sensorData.ec ?? 1350) <= 2000
+                            ? "#16A34A"
+                            : "#EA580C",
+                      }}
+                    >
+                      {(sensorData.ec ?? 1350) >= 700 && (sensorData.ec ?? 1350) <= 2000 ? "Optimal" : "Perhatian"}
+                    </span>
+                    <span style={{ fontSize: "10.5px", color: "var(--icon-muted)" }}>800-2000</span>
+                  </div>
+                </div>
+
+                {/* Nitrogen (N) */}
+                <div
+                  style={{
+                    background: "var(--bg-card)",
+                    borderRadius: "18px",
+                    padding: "16px",
+                    boxShadow: "var(--glow-card)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    border: "1px solid var(--border-card)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                      Nitrogen (N)
+                    </span>
+                    <div style={{ background: "#F3E8FF", borderRadius: "10px", padding: "6px", color: "#7C3AED" }}>
+                      <FlaskConical size={16} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-primary)" }}>
+                      {sensorData.nitrogen ?? 48}
+                    </span>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--icon-muted)" }}>mg/kg</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: (sensorData.nitrogen ?? 48) >= 30 ? "rgba(34, 197, 94, 0.15)" : "rgba(249, 115, 22, 0.15)",
+                        color: (sensorData.nitrogen ?? 48) >= 30 ? "#16A34A" : "#EA580C",
+                      }}
+                    >
+                      {(sensorData.nitrogen ?? 48) >= 30 ? "Cukup" : "Rendah"}
+                    </span>
+                    <span style={{ fontSize: "10.5px", color: "var(--icon-muted)" }}>&gt;30 mg/kg</span>
+                  </div>
+                </div>
+
+                {/* Fosfor (P) */}
+                <div
+                  style={{
+                    background: "var(--bg-card)",
+                    borderRadius: "18px",
+                    padding: "16px",
+                    boxShadow: "var(--glow-card)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    border: "1px solid var(--border-card)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                      Fosfor (P)
+                    </span>
+                    <div style={{ background: "#FCE7F3", borderRadius: "10px", padding: "6px", color: "#DB2777" }}>
+                      <Sparkles size={16} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                    <span style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-primary)" }}>
+                      {sensorData.phosphorus ?? 35}
+                    </span>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--icon-muted)" }}>mg/kg</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        background: (sensorData.phosphorus ?? 35) >= 20 ? "rgba(34, 197, 94, 0.15)" : "rgba(249, 115, 22, 0.15)",
+                        color: (sensorData.phosphorus ?? 35) >= 20 ? "#16A34A" : "#EA580C",
+                      }}
+                    >
+                      {(sensorData.phosphorus ?? 35) >= 20 ? "Cukup" : "Rendah"}
+                    </span>
+                    <span style={{ fontSize: "10.5px", color: "var(--icon-muted)" }}>&gt;20 mg/kg</span>
+                  </div>
+                </div>
+
+                {/* Kalium (K) - Full width span */}
+                <div
+                  style={{
+                    gridColumn: "1 / -1",
+                    background: "var(--bg-card)",
+                    borderRadius: "18px",
+                    padding: "14px 16px",
+                    boxShadow: "var(--glow-card)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    border: "1px solid var(--border-card)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ background: "#DCFCE7", borderRadius: "10px", padding: "8px", color: "#15803D" }}>
+                      <Layers size={18} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)", display: "block" }}>
+                        Kalium (K) — Pembentukan Buah & Daya Tahan
+                      </span>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: "4px", marginTop: "2px" }}>
+                        <span style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-primary)" }}>
+                          {sensorData.potassium ?? 115}
+                        </span>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--icon-muted)" }}>mg/kg</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "3px 10px",
+                        borderRadius: "6px",
+                        background: (sensorData.potassium ?? 115) >= 70 ? "rgba(34, 197, 94, 0.15)" : "rgba(249, 115, 22, 0.15)",
+                        color: (sensorData.potassium ?? 115) >= 70 ? "#16A34A" : "#EA580C",
+                        display: "inline-block",
+                      }}
+                    >
+                      {(sensorData.potassium ?? 115) >= 70 ? "Cukup (Optimal)" : "Rendah"}
+                    </span>
+                    <span style={{ fontSize: "10.5px", color: "var(--icon-muted)", display: "block", marginTop: "4px" }}>
+                      Target &gt; 70 mg/kg
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

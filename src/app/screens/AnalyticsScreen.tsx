@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router";
 import {
   AreaChart,
   Area,
@@ -17,10 +18,18 @@ import {
   X,
   CheckCircle2,
   Sprout,
+  Database,
+  Usb,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
-import { generateNPKSoilPDFReport } from "../services/pdfReportService";
+import {
+  generateNPKSoilPDFReport,
+  getMoistureStatus,
+  getPhStatus,
+  getCombinedSoilStatus,
+} from "../services/pdfReportService";
+import { getOfflineRecords } from "../services/indexedDbService";
 import { hapticLight, hapticSuccess } from "../services/hapticsService";
 import { getActiveUser } from "../utils/authHelper";
 
@@ -149,6 +158,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function AnalyticsScreen() {
+  const navigate = useNavigate();
+  const [dataSource, setDataSource] = useState<"demo" | "local">(
+    () => (localStorage.getItem("iot_analytics_source") as "demo" | "local") || "demo"
+  );
+  const [localPoints, setLocalPoints] = useState<SoilDataPoint[]>([]);
+  const [isLoadingLocal, setIsLoadingLocal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(() => localStorage.getItem("iot_analytics_filter") || "Hari Ini");
   const [activeChartMode, setActiveChartMode] = useState<"all" | "moisture" | "ph">("all");
   const [activeActivityFilter, setActiveActivityFilter] = useState(() => localStorage.getItem("iot_analytics_activity_filter") || "Semua");
@@ -159,6 +174,42 @@ export function AnalyticsScreen() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const loadIndexedDBHistory = useCallback(async () => {
+    setIsLoadingLocal(true);
+    try {
+      const records = await getOfflineRecords({ limit: 100 });
+      // Sort chronologically ascending for chart progression
+      const sorted = [...records].sort((a, b) => a.timestamp - b.timestamp);
+      const mapped: SoilDataPoint[] = sorted.map((rec) => ({
+        time: new Intl.DateTimeFormat("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }).format(new Date(rec.timestamp)),
+        moisture: Number(rec.moisture.toFixed(1)),
+        ph: Number(rec.ph.toFixed(2)),
+        suhu: rec.temperature ? Number(rec.temperature.toFixed(1)) : undefined,
+        ec: rec.ec ? rec.ec : undefined,
+        n: rec.nitrogen ? rec.nitrogen : undefined,
+        p: rec.phosphorus ? rec.phosphorus : undefined,
+        k: rec.potassium ? rec.potassium : undefined,
+      }));
+      setLocalPoints(mapped);
+    } catch (err) {
+      console.warn("Gagal memuat riwayat IndexedDB:", err);
+    } finally {
+      setIsLoadingLocal(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadIndexedDBHistory();
+  }, [loadIndexedDBHistory]);
+
+  useEffect(() => {
+    localStorage.setItem("iot_analytics_source", dataSource);
+  }, [dataSource]);
+
   useEffect(() => {
     if (toastMessage) {
       const timer = setTimeout(() => setToastMessage(null), 3500);
@@ -166,7 +217,14 @@ export function AnalyticsScreen() {
     }
   }, [toastMessage]);
 
-  const currentData = getFilteredData(activeFilter);
+  const currentData =
+    dataSource === "local" && localPoints.length > 0
+      ? localPoints
+      : getFilteredData(activeFilter);
+  const activePeriodLabel =
+    dataSource === "local" && localPoints.length > 0
+      ? `Rekaman Alat (${localPoints.length} sampel)`
+      : activeFilter;
   const avgMoisture = (currentData.reduce((acc, curr) => acc + curr.moisture, 0) / currentData.length).toFixed(1);
   const avgPH = (currentData.reduce((acc, curr) => acc + curr.ph, 0) / currentData.length).toFixed(2);
 
@@ -180,9 +238,14 @@ export function AnalyticsScreen() {
 
   const handleExportCSV = () => {
     hapticSuccess();
-    let csvContent = "Waktu,Kelembaban (%),pH Tanah\n";
+    const activeUser = getActiveUser();
+    const operatorName = activeUser.namaLengkap || "Operator Lapangan";
+    let csvContent = "Waktu,Kelembaban (%),Kategori Kelembaban,pH Tanah,Kategori pH,Status Evaluasi,Operator\n";
     currentData.forEach(row => {
-      csvContent += `${row.time},${row.moisture},${row.ph}\n`;
+      const mStat = getMoistureStatus(row.moisture);
+      const pStat = getPhStatus(row.ph);
+      const evalStat = getCombinedSoilStatus(row.moisture, row.ph).replace(/,/g, " &");
+      csvContent += `${row.time},${row.moisture},${mStat},${row.ph},${pStat},${evalStat},"${operatorName}"\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -190,14 +253,14 @@ export function AnalyticsScreen() {
     
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Riwayat_Sensor_${activeFilter.replace(/\s+/g, "_")}.csv`);
+    link.setAttribute("download", `Riwayat_Sensor_${activePeriodLabel.replace(/\s+/g, "_")}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
     setExportSuccess(true);
-    setToastMessage("Data riwayat CSV berhasil diunduh!");
+    setToastMessage(`Data CSV (${operatorName}) berhasil diunduh!`);
     setTimeout(() => setExportSuccess(false), 3000);
   };
 
@@ -207,7 +270,7 @@ export function AnalyticsScreen() {
     try {
       const activeUser = getActiveUser();
       const operatorName = activeUser.namaLengkap || (activeUser as any).name || "Operator Lapangan";
-      generateNPKSoilPDFReport(currentData, activeFilter, operatorName);
+      generateNPKSoilPDFReport(currentData, activePeriodLabel, operatorName);
       setToastMessage("Laporan PDF resmi berhasil dicetak & diunduh!");
     } catch (err) {
       console.error("Gagal mencetak PDF:", err);
@@ -258,6 +321,144 @@ export function AnalyticsScreen() {
       </div>
 
       <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* Data Source Switcher: Preset Demo vs Rekaman Alat (IndexedDB) */}
+        <div
+          style={{
+            background: "var(--bg-card)",
+            borderRadius: "14px",
+            padding: "10px 12px",
+            boxShadow: "var(--glow-card)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Database size={15} color="#3B82F6" />
+              <span style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--text-primary)" }}>
+                Sumber Data Analitik
+              </span>
+            </div>
+            {dataSource === "local" && (
+              <button
+                onClick={() => {
+                  hapticLight();
+                  loadIndexedDBHistory();
+                  setToastMessage("Riwayat IndexedDB diperbarui!");
+                }}
+                style={{
+                  background: "var(--bg-hover)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "8px",
+                  padding: "3px 8px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <RefreshCw size={11} className={isLoadingLocal ? "spin" : ""} />
+                Segarkan ({localPoints.length})
+              </button>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "6px",
+              background: "var(--bg-hover)",
+              padding: "3px",
+              borderRadius: "10px",
+            }}
+          >
+            <button
+              onClick={() => {
+                hapticLight();
+                setDataSource("demo");
+              }}
+              style={{
+                background: dataSource === "demo" ? "var(--bg-card)" : "transparent",
+                color: dataSource === "demo" ? "#3B82F6" : "var(--text-muted)",
+                border: "none",
+                borderRadius: "8px",
+                padding: "7px 10px",
+                fontSize: "12px",
+                fontWeight: dataSource === "demo" ? 700 : 500,
+                cursor: "pointer",
+                boxShadow: dataSource === "demo" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.2s",
+              }}
+            >
+              Preset Demo
+            </button>
+            <button
+              onClick={() => {
+                hapticLight();
+                setDataSource("local");
+                loadIndexedDBHistory();
+              }}
+              style={{
+                background: dataSource === "local" ? "var(--bg-card)" : "transparent",
+                color: dataSource === "local" ? "#10B981" : "var(--text-muted)",
+                border: "none",
+                borderRadius: "8px",
+                padding: "7px 10px",
+                fontSize: "12px",
+                fontWeight: dataSource === "local" ? 700 : 500,
+                cursor: "pointer",
+                boxShadow: dataSource === "local" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.2s",
+              }}
+            >
+              Rekaman Alat ({localPoints.length})
+            </button>
+          </div>
+
+          {dataSource === "local" && localPoints.length === 0 && (
+            <div
+              style={{
+                background: "rgba(249, 115, 22, 0.1)",
+                border: "1px solid rgba(249, 115, 22, 0.3)",
+                borderRadius: "10px",
+                padding: "8px 10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <span style={{ fontSize: "11.5px", color: "#F97316", fontWeight: 500 }}>
+                Belum ada rekaman IndexedDB. Menampilkan data fallback demo.
+              </span>
+              <button
+                onClick={() => navigate("/offline")}
+                style={{
+                  background: "#F97316",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "7px",
+                  padding: "4px 8px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <Usb size={11} /> Rekam USB
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Filter Chips */}
         <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
           {filters.map((f) => (
@@ -378,7 +579,17 @@ export function AnalyticsScreen() {
               <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{avgMoisture}</span>
               <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>%</span>
             </div>
-            <span style={{ fontSize: "11px", color: "#16A34A", fontWeight: 600 }}>Tercatat Stabil</span>
+            <span
+              style={{
+                fontSize: "11px",
+                color: getMoistureStatus(Number(avgMoisture)) === "Optimal" ? "#16A34A" : "#F97316",
+                fontWeight: 600,
+              }}
+            >
+              {getMoistureStatus(Number(avgMoisture)) === "Optimal"
+                ? "Tercatat Stabil (Optimal)"
+                : `Status: ${getMoistureStatus(Number(avgMoisture))}`}
+            </span>
           </div>
 
           <div
@@ -394,7 +605,17 @@ export function AnalyticsScreen() {
               <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{avgPH}</span>
               <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)" }}>pH</span>
             </div>
-            <span style={{ fontSize: "11px", color: "#16A34A", fontWeight: 600 }}>Kondisi Netral Optimal</span>
+            <span
+              style={{
+                fontSize: "11px",
+                color: getPhStatus(Number(avgPH)) === "Netral" ? "#16A34A" : "#F97316",
+                fontWeight: 600,
+              }}
+            >
+              {getPhStatus(Number(avgPH)) === "Netral"
+                ? "Kondisi Netral Optimal"
+                : `Kondisi Tanah ${getPhStatus(Number(avgPH))}`}
+            </span>
           </div>
         </div>
 

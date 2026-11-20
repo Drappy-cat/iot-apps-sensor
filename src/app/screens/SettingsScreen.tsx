@@ -26,6 +26,9 @@ import {
   saveFirebaseConfig,
   STORAGE_KEY_SIM_ENABLED,
   INITIAL_SENSOR_DATA,
+  getSavedSensorMode,
+  saveSensorMode,
+  type SensorMode,
 } from "../services/firebaseService";
 import {
   hapticLight,
@@ -58,9 +61,29 @@ export function SettingsScreen() {
     return saved !== null ? saved === "true" : true;
   });
 
-  // Simulation parameters (Hanya Kelembaban dan pH)
+  // Sensor display mode: "focused" (2 parameters) vs "full_npk" (7-in-1 parameters)
+  const [sensorMode, setSensorMode] = useState<SensorMode>(getSavedSensorMode);
+
+  // Simulation parameters (Fokus & Lengkap NPK 7-in-1)
   const [simMoisture, setSimMoisture] = useState(65);
   const [simPH, setSimPH] = useState(6.7);
+  const [simTemp, setSimTemp] = useState(26.8);
+  const [simEC, setSimEC] = useState(1350);
+  const [simN, setSimN] = useState(48);
+  const [simP, setSimP] = useState(35);
+  const [simK, setSimK] = useState(115);
+
+  const handleToggleSensorMode = () => {
+    hapticMedium();
+    const next: SensorMode = sensorMode === "focused" ? "full_npk" : "focused";
+    saveSensorMode(next);
+    setSensorMode(next);
+    setToastMessage(
+      next === "full_npk"
+        ? "Mode Sensor Lengkap (NPK 7-in-1) diaktifkan!"
+        : "Mode Sensor Fokus (Kelembaban & pH) diaktifkan!"
+    );
+  };
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SIM_ENABLED, simEnabled.toString());
@@ -69,11 +92,16 @@ export function SettingsScreen() {
   useEffect(() => {
     const dataToSave = {
       moisture: simMoisture,
+      temperature: simTemp,
       ph: simPH,
+      ec: simEC,
+      nitrogen: simN,
+      phosphorus: simP,
+      potassium: simK,
       timestamp: Date.now(),
     };
     localStorage.setItem("iot_sim_base_data", JSON.stringify(dataToSave));
-  }, [simMoisture, simPH]);
+  }, [simMoisture, simTemp, simPH, simEC, simN, simP, simK]);
 
   const handleSaveFirebase = () => {
     hapticSuccess();
@@ -347,6 +375,44 @@ export function SettingsScreen() {
                   toggleTheme(e);
                 }}
               />
+            </div>
+
+            {/* Mode Parameter Sensor (Fokus 2-Parameter vs Lengkap NPK 7-in-1) */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 18px",
+                borderBottom: "1px solid var(--bg-hover)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    background: "#ECFDF5",
+                    borderRadius: "10px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Cpu size={18} color="#059669" strokeWidth={2} />
+                </div>
+                <div>
+                  <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                    Mode Sensor NPK 7-in-1 Lengkap
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--icon-muted)" }}>
+                    {sensorMode === "full_npk"
+                      ? "Menampilkan 7 parameter (Moisture, pH, Suhu, EC, N, P, K)"
+                      : "Mode Fokus aktif (hanya Kelembaban & pH Tanah)"}
+                  </p>
+                </div>
+              </div>
+              <Toggle value={sensorMode === "full_npk"} onChange={handleToggleSensorMode} />
             </div>
 
             {/* Notifications */}
@@ -865,6 +931,98 @@ export function SettingsScreen() {
                         />
                       </div>
 
+                      {sensorMode === "full_npk" && (
+                        <>
+                          {/* Suhu Tanah */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                                Suhu Tanah (°C)
+                              </span>
+                              <span style={{ background: "#E0F2FE", color: "#0284C7", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
+                                {simTemp}°C
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={15}
+                              max={42}
+                              step={0.5}
+                              value={simTemp}
+                              onChange={(e) => setSimTemp(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "#0284C7", height: "6px", cursor: "pointer" }}
+                            />
+                          </div>
+
+                          {/* Konduktivitas EC */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                                Konduktivitas EC (µS/cm)
+                              </span>
+                              <span style={{ background: "#FEF3C7", color: "#D97706", borderRadius: "8px", padding: "2px 8px", fontSize: "12px", fontWeight: 700 }}>
+                                {simEC} µS/cm
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={200}
+                              max={2800}
+                              step={50}
+                              value={simEC}
+                              onChange={(e) => setSimEC(Number(e.target.value))}
+                              style={{ width: "100%", accentColor: "#D97706", height: "6px", cursor: "pointer" }}
+                            />
+                          </div>
+
+                          {/* Nitrogen, Fosfor, Kalium */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--text-primary)" }}>N</span>
+                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#7C3AED" }}>{simN}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={150}
+                                value={simN}
+                                onChange={(e) => setSimN(Number(e.target.value))}
+                                style={{ width: "100%", accentColor: "#7C3AED", cursor: "pointer" }}
+                              />
+                            </div>
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--text-primary)" }}>P</span>
+                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#DB2777" }}>{simP}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={120}
+                                value={simP}
+                                onChange={(e) => setSimP(Number(e.target.value))}
+                                style={{ width: "100%", accentColor: "#DB2777", cursor: "pointer" }}
+                              />
+                            </div>
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--text-primary)" }}>K</span>
+                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#15803D" }}>{simK}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={10}
+                                max={250}
+                                value={simK}
+                                onChange={(e) => setSimK(Number(e.target.value))}
+                                style={{ width: "100%", accentColor: "#15803D", cursor: "pointer" }}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
                       {/* Preview Box */}
                       <div
                         style={{
@@ -924,12 +1082,12 @@ export function SettingsScreen() {
                                 timestamp: Date.now(),
                                 slaveId: 4,
                                 moisture: simMoisture,
-                                temperature: 27.5,
-                                ec: 1350,
+                                temperature: simTemp,
+                                ec: simEC,
                                 ph: simPH,
-                                nitrogen: 45,
-                                phosphorus: 30,
-                                potassium: 120,
+                                nitrogen: simN,
+                                phosphorus: simP,
+                                potassium: simK,
                                 status: "OK" as const,
                                 syncStatus: "local" as const,
                                 syncedAt: null,
