@@ -28,6 +28,11 @@ export interface SoilDataPoint {
   time: string;
   moisture: number;
   ph: number;
+  suhu?: number;
+  ec?: number;
+  n?: number;
+  p?: number;
+  k?: number;
 }
 
 const dataHariIni: SoilDataPoint[] = [

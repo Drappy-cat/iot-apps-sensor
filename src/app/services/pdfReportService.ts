@@ -149,12 +149,12 @@ export function generateNPKSoilPDFReport(
 
   // Compute stats
   const moistures = data.map((d) => d.moisture);
-  const temps = data.map((d) => d.suhu);
+  const temps = data.map((d) => d.suhu ?? 26.5);
   const phs = data.map((d) => d.ph);
-  const ecs = data.map((d) => d.ec);
-  const ns = data.map((d) => d.n);
-  const ps = data.map((d) => d.p);
-  const ks = data.map((d) => d.k);
+  const ecs = data.map((d) => d.ec ?? 1250);
+  const ns = data.map((d) => d.n ?? 45);
+  const ps = data.map((d) => d.p ?? 30);
+  const ks = data.map((d) => d.k ?? 120);
 
   const kpiItems = [
     { label: "Kelembaban", value: `${avg(moistures)}%`, sub: `Min ${minVal(moistures)}% · Max ${maxVal(moistures)}%`, color: COLORS.primary },
@@ -251,13 +251,13 @@ export function generateNPKSoilPDFReport(
     String(idx + 1),
     row.time,
     String(row.moisture),
-    String(row.suhu),
+    String(row.suhu ?? "-"),
     String(row.ph),
-    String(row.ec),
-    String(row.n),
-    String(row.p),
-    String(row.k),
-    getNPKStatus(row.n, row.p, row.k),
+    String(row.ec ?? "-"),
+    String(row.n ?? "-"),
+    String(row.p ?? "-"),
+    String(row.k ?? "-"),
+    getNPKStatus(row.n ?? 45, row.p ?? 30, row.k ?? 120),
   ]);
 
   autoTable(doc, {

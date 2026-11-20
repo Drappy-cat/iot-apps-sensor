@@ -1,7 +1,5 @@
 import { NPKSensorData, SoilAnalysis } from "../types/sensor";
 
-import { NPKSensorData, SoilAnalysis } from "../types/sensor";
-
 export function analyzeSoilData(data: NPKSensorData, setpointMoisture: number = 65): SoilAnalysis {
   const { moisture, ph } = data;
 

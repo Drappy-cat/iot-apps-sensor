@@ -54,10 +54,10 @@ const ALERT_RULES: AlertRule[] = [
   {
     id: 1004,
     type: "temp_extreme",
-    check: (d) => d.temperature > 35,
+    check: (d) => (d.temperature ?? 25) > 35,
     title: "🌡️ Suhu Tanah Sangat Panas!",
     body: (d) =>
-      `Suhu perakaran mencapai ${d.temperature.toFixed(1)}°C. Potensi stres panas pada akar tanaman.`,
+      `Suhu perakaran mencapai ${(d.temperature ?? 25).toFixed(1)}°C. Potensi stres panas pada akar tanaman.`,
   },
 ];
 

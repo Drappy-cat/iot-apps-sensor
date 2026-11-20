@@ -10,6 +10,8 @@ import {
   RefreshCw,
   Camera,
   Waves,
+  Usb,
+  ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BottomNav } from "../components/BottomNav";
