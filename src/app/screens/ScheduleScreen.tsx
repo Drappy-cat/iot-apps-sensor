@@ -59,7 +59,7 @@ export function ScheduleScreen() {
       },
       {
         id: 3,
-        title: "Dosing Nutrisi NPK",
+        title: "Pengkondisi pH Tanah",
         time: "08:00 – 09:00",
         targetMoisture: 68,
         iconType: "sprout",

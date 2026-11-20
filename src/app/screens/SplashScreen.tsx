@@ -185,7 +185,7 @@ export function SplashScreen() {
                 <div className="splash-tagline-pill">
                   <span style={{ fontSize: "14px" }}>🌿</span>
                   <span className="splash-tagline-text">
-                    Sistem Otomasi Cerdas · NPK 7-in-1 IoT
+                    Monitoring pH & Kelembaban · Kamera AI
                   </span>
                 </div>
               </motion.div>
@@ -193,7 +193,7 @@ export function SplashScreen() {
           </AnimatePresence>
         </div>
 
-        {/* Right Column in Landscape / Bottom Section in Portrait: Loading & Badges */}
+        {/* Action / Loading Section */}
         <div className={`splash-action-section ${isLoading ? "is-loading" : ""}`}>
           {/* Loading Section */}
           <AnimatePresence>
@@ -212,7 +212,7 @@ export function SplashScreen() {
                     width: "100%",
                   }}
                 >
-                  <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", fontWeight: 500 }}>
+                  <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", fontWeight: 500 }}>
                     Memuat sistem...
                   </span>
                   <span style={{ fontSize: "12px", color: "#34D399", fontWeight: 700 }}>
@@ -266,12 +266,12 @@ export function SplashScreen() {
           <AnimatePresence>
             {isLoading && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
                 className="splash-badges-wrapper"
               >
-                {["🌡 Suhu", "💧 Irigasi", "🌬 Ventilasi"].map((label) => (
+                {["💧 Kelembaban", "🧪 pH Tanah", "📷 Kamera AI"].map((label) => (
                   <div key={label} className="splash-badge-item">
                     {label}
                   </div>
@@ -286,10 +286,10 @@ export function SplashScreen() {
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1.5 }}
+        transition={{ delay: 1.2 }}
         className="splash-version-text"
       >
-        v1.2.0 · © 2025 Magetan Greenhouse
+        v1.2.0 · © 2026 Magetan Greenhouse
       </motion.p>
     </div>
   );
