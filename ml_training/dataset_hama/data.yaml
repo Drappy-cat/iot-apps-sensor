@@ -1,0 +1,17 @@
+# Path root dataset (relatif terhadap folder ml_training)
+path: ./dataset_hama
+train: train/images
+val: valid/images
+test: test/images
+
+# Jumlah kelas deteksi hama & penyakit tanaman
+nc: 6
+
+# Nama label kelas sesuai urutan index 0-5
+names:
+  0: ulat_grayak
+  1: kutu_kebul
+  2: ulat_penggulung
+  3: kutu_daun_aphids
+  4: daun_layu_fusarium
+  5: tanaman_sehat

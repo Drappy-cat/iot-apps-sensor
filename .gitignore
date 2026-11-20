@@ -32,3 +32,29 @@ ios/
 [0-9]*.[0-9]*.[0-9]*.md
 v[0-9]*.[0-9]*.[0-9]*.md
 
+# ML Training Environment, Datasets, Checkpoints & Exported Models
+ml_training/.venv/
+ml_training/venv/
+ml_training/__pycache__/
+ml_training/scripts/__pycache__/
+ml_training/downloads_raw/
+ml_training/dataset_hama/train/images/*
+!ml_training/dataset_hama/train/images/.gitkeep
+ml_training/dataset_hama/train/labels/*
+!ml_training/dataset_hama/train/labels/.gitkeep
+ml_training/dataset_hama/valid/images/*
+!ml_training/dataset_hama/valid/images/.gitkeep
+ml_training/dataset_hama/valid/labels/*
+!ml_training/dataset_hama/valid/labels/.gitkeep
+ml_training/dataset_hama/test/images/*
+!ml_training/dataset_hama/test/images/.gitkeep
+ml_training/dataset_hama/test/labels/*
+!ml_training/dataset_hama/test/labels/.gitkeep
+ml_training/hasil_training_hama/*
+!ml_training/hasil_training_hama/.gitkeep
+ml_training/weights/*.pt
+ml_training/exports/*
+!ml_training/exports/.gitkeep
+*.pt
+
+
