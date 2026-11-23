@@ -33,6 +33,8 @@ ios/
 v[0-9]*.[0-9]*.[0-9]*.md
 
 # ML Training Environment, Datasets, Checkpoints & Exported Models
+dataset/
+*.zip
 ml_training/.venv/
 ml_training/venv/
 ml_training/__pycache__/

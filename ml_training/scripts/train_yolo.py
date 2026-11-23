@@ -1,9 +1,9 @@
 """
-Skrip Training Model YOLOv8 Deteksi Hama & Penyakit Tanaman (6 Kelas)
+Skrip Training Model YOLOv11 Deteksi Hama & Penyakit Tanaman (6 Kelas)
 Dirancang untuk dijalankan di laptop ber-GPU NVIDIA (CUDA) maupun Google Colab.
 
 Contoh jalankan:
-  python scripts/train_yolo.py --model yolov8n.pt --epochs 100 --batch 16 --imgsz 640
+  python scripts/train_yolo.py --model yolo11n.pt --epochs 100 --batch 16 --imgsz 640
 """
 
 import argparse
@@ -20,8 +20,8 @@ WEIGHTS_DIR = BASE_DIR / "weights"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Training YOLOv8 Deteksi Hama & Penyakit Tanaman")
-    parser.add_argument("--model", type=str, default="yolov8n.pt", help="Pre-trained weight (yolov8n.pt / yolov8s.pt)")
+    parser = argparse.ArgumentParser(description="Training YOLOv11 Deteksi Hama & Penyakit Tanaman")
+    parser.add_argument("--model", type=str, default="yolo11n.pt", help="Pre-trained weight (yolo11n.pt / yolo11s.pt / yolov8n.pt)")
     parser.add_argument("--epochs", type=int, default=100, help="Jumlah epoch pelatihan")
     parser.add_argument("--batch", type=int, default=16, help="Ukuran batch (kurangi ke 8 jika VRAM < 6GB)")
     parser.add_argument("--imgsz", type=int, default=640, help="Resolusi input gambar")
