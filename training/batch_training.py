@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from collections import Counter
 
 _CONDA_TF_PYTHON = r"C:\Users\Lenovo\anaconda3\envs\tensorflow\python.exe"
@@ -19,6 +20,11 @@ except ModuleNotFoundError:
         print(f"Mengalihkan eksekusi ke environment conda 'tensorflow': {_CONDA_TF_PYTHON}")
         raise SystemExit(subprocess.call([_CONDA_TF_PYTHON, *sys.argv]))
     raise
+
+try:
+    import pynvml
+except ImportError:
+    pynvml = None
 
 TARGET_CLASSES = [
     "kutu_daun_aphids",    # 0: aphids
@@ -45,6 +51,135 @@ DATASET_MAPPING = {
         },
     },
 }
+
+
+class GpuThermalGuard:
+    """Menjaga suhu GPU di bawah batas aman dengan throttling adaptif dan jeda otomatis."""
+
+    def __init__(
+        self,
+        device_index: int = 0,
+        max_temp_c: int = 75,
+        resume_temp_c: int = 72,
+        throttle_temp_c: int = 69,
+        check_interval_sec: float = 2.0,
+        poll_interval_sec: float = 3.0,
+        epoch_cooldown_sec: float = 8.0,
+    ) -> None:
+        self.device_index = device_index
+        self.max_temp_c = max_temp_c
+        self.resume_temp_c = min(resume_temp_c, max_temp_c - 1)
+        self.throttle_temp_c = throttle_temp_c
+        self.check_interval_sec = check_interval_sec
+        self.poll_interval_sec = poll_interval_sec
+        self.epoch_cooldown_sec = epoch_cooldown_sec
+        self._last_check = 0.0
+        self._nvml_handle = None
+
+        if pynvml is not None and torch.cuda.is_available():
+            try:
+                pynvml.nvmlInit()
+                self._nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
+            except Exception:
+                self._nvml_handle = None
+
+    def get_temp_c(self) -> int | None:
+        """Membaca suhu GPU saat ini dalam derajat Celcius."""
+        if self._nvml_handle is not None:
+            try:
+                return int(
+                    pynvml.nvmlDeviceGetTemperature(
+                        self._nvml_handle, pynvml.NVML_TEMPERATURE_GPU
+                    )
+                )
+            except Exception:
+                pass
+
+        if not torch.cuda.is_available():
+            return None
+
+        try:
+            out = subprocess.check_output(
+                [
+                    "nvidia-smi",
+                    f"--id={self.device_index}",
+                    "--query-gpu=temperature.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
+                text=True,
+                timeout=3,
+            ).strip()
+            return int(out.splitlines()[0])
+        except Exception:
+            return None
+
+    def _release_gpu_idle(self) -> None:
+        """Menghentikan antrean kernel GPU agar suhu cepat turun saat dijeda."""
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+
+    def _wait_until_cool(self, current_temp: int) -> None:
+        """Menjeda training saat suhu >= max_temp_c hingga turun di bawah batas aman."""
+        self._release_gpu_idle()
+        print(
+            f"\n[THERMAL STOP] Suhu GPU mencapai {current_temp}°C (>= {self.max_temp_c}°C). "
+            f"Training dijeda sementara dan akan lanjut otomatis saat suhu <= {self.resume_temp_c}°C (< {self.max_temp_c}°C)..."
+        )
+        last_log = time.monotonic()
+        while True:
+            time.sleep(self.poll_interval_sec)
+            temp = self.get_temp_c()
+            if temp is None or temp <= self.resume_temp_c:
+                print(
+                    f"[THERMAL RESUME] Suhu GPU turun ke {temp}°C (< {self.max_temp_c}°C). Melanjutkan training...\n"
+                )
+                self._last_check = time.monotonic()
+                return
+            now = time.monotonic()
+            if now - last_log >= 12.0:
+                print(f"[THERMAL COOLING] Suhu GPU saat ini: {temp}°C (target <= {self.resume_temp_c}°C)...")
+                last_log = now
+
+    def on_train_batch_end(self, trainer) -> None:
+        """Callback tiap batch: throttling ringan saat hangat dan auto-pause jika >= max_temp_c."""
+        now = time.monotonic()
+        if now - self._last_check < self.check_interval_sec:
+            return
+        self._last_check = now
+
+        temp = self.get_temp_c()
+        if temp is None:
+            return
+
+        if temp >= self.max_temp_c:
+            self._wait_until_cool(temp)
+        elif temp >= self.throttle_temp_c:
+            # Jeda singkat adaptif agar beban GPU & panas tetap terjaga di bawah 75°C
+            self._release_gpu_idle()
+            ratio = (temp - self.throttle_temp_c + 1) / max(1, self.max_temp_c - self.throttle_temp_c)
+            time.sleep(0.25 + 0.55 * ratio)
+
+    def on_train_epoch_end(self, trainer) -> None:
+        """Callback akhir epoch: pendinginan sejenak antar epoch agar laptop tidak overheat."""
+        self._release_gpu_idle()
+        temp = self.get_temp_c()
+        epoch_num = getattr(trainer, "epoch", 0) + 1
+        total_epochs = getattr(trainer, "epochs", "?")
+        if temp is not None:
+            print(f"[THERMAL] Selesai Epoch {epoch_num}/{total_epochs} | Suhu GPU: {temp}°C | Pendinginan {self.epoch_cooldown_sec:.0f}s...")
+        time.sleep(self.epoch_cooldown_sec)
+        temp_after = self.get_temp_c()
+        if temp_after is not None and temp_after >= self.max_temp_c:
+            self._wait_until_cool(temp_after)
+
+    def close(self) -> None:
+        if self._nvml_handle is not None and pynvml is not None:
+            try:
+                pynvml.nvmlShutdown()
+            except Exception:
+                pass
+            self._nvml_handle = None
 
 
 def convert_label_to_bbox(parts: list[str], target_cls: int) -> str | None:
@@ -174,8 +309,44 @@ def prepare_merged_dataset(source_dir: str, merged_dir: str) -> str:
     return merged_yaml
 
 
+def resolve_training_checkpoint(
+    run_dir: str,
+    default_model_ref: str,
+    target_epochs: int,
+) -> tuple[str, bool, bool]:
+    """Mengecek apakah ada checkpoint last.pt untuk auto-resume atau sudah selesai."""
+    weights_dir = os.path.join(run_dir, "weights")
+    last_pt = os.path.join(weights_dir, "last.pt")
+    best_pt = os.path.join(weights_dir, "best.pt")
+
+    if not os.path.isfile(last_pt):
+        return default_model_ref, False, False
+
+    try:
+        ckpt = torch.load(last_pt, map_location="cpu", weights_only=False)
+    except Exception as exc:
+        print(f"Peringatan: gagal membaca {last_pt} ({exc}), memulai training baru.")
+        return default_model_ref, False, False
+
+    done_epoch = ckpt.get("epoch", -1)
+    has_optimizer = ckpt.get("optimizer") is not None
+
+    if done_epoch == -1 and os.path.isfile(best_pt):
+        print(f"Training pada {run_dir} sudah selesai penuh. Model terbaik: {best_pt}")
+        return best_pt, False, True
+
+    if done_epoch >= 0 and has_optimizer and (done_epoch + 1) < target_epochs:
+        print(
+            f"Checkpoint ditemukan! Melanjutkan training dari {last_pt} "
+            f"(sudah selesai {done_epoch + 1}/{target_epochs} epoch)."
+        )
+        return last_pt, True, False
+
+    return default_model_ref, False, False
+
+
 def train_yolo_batch() -> None:
-    """Melakukan training deteksi objek YOLOv11 pada dataset hama & penyakit tanaman."""
+    """Melakukan training deteksi objek YOLOv11 dengan auto-resume & proteksi suhu GPU."""
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
 
@@ -193,11 +364,17 @@ def train_yolo_batch() -> None:
     device = 0 if torch.cuda.is_available() else "cpu"
     optimizer = "AdamW"
     batch_size = 8
-    workers = 2
+    workers = 2  # Sedikit worker agar beban CPU & panas laptop tetap rendah
     amp = True
     cache = False
-    save_period = 10
+    save_period = 5  # Simpan checkpoint berkala tiap 5 epoch (last.pt & best.pt tetap disimpan tiap epoch)
     plots = True
+
+    # Pengaturan batas suhu GPU & pendinginan otomatis
+    max_gpu_temp_c = 75       # Auto stop (jeda) jika suhu >= 75°C
+    resume_gpu_temp_c = 72    # Lanjut otomatis setelah suhu <= 72°C (di bawah 75°C)
+    throttle_gpu_temp_c = 69  # Mulai jeda adaptif ringan di 69°C agar tidak cepat menyentuh 75°C
+    epoch_cooldown_sec = 8.0  # Istirahat 8 detik setiap selesai 1 epoch
 
     lr0 = 0.0010
     lrf = 0.01
@@ -218,57 +395,105 @@ def train_yolo_batch() -> None:
     output_base_dir = os.path.join(base_dir, "models", "trained_weights")
     os.makedirs(output_base_dir, exist_ok=True)
 
+    thermal_guard = GpuThermalGuard(
+        device_index=device if isinstance(device, int) else 0,
+        max_temp_c=max_gpu_temp_c,
+        resume_temp_c=resume_gpu_temp_c,
+        throttle_temp_c=throttle_gpu_temp_c,
+        epoch_cooldown_sec=epoch_cooldown_sec,
+    )
+
     if torch.cuda.is_available():
         gpu_name = torch.cuda.get_device_name(0)
         vram = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
-        print(f"Menjalankan pada GPU: {gpu_name} ({vram:.2f} GB VRAM)")
+        start_temp = thermal_guard.get_temp_c()
+        temp_info = f" | Suhu awal: {start_temp}°C" if start_temp is not None else ""
+        print(f"Menjalankan pada GPU: {gpu_name} ({vram:.2f} GB VRAM){temp_info}")
+        print(
+            f"Proteksi Suhu Aktif: jeda otomatis >= {max_gpu_temp_c}°C, "
+            f"lanjut <= {resume_gpu_temp_c}°C, jeda antar epoch {epoch_cooldown_sec:.0f}s."
+        )
     else:
         print("GPU CUDA tidak terdeteksi! Training akan berjalan di CPU.")
 
-    for model_name in models:
-        local_weight = os.path.join(base_dir, model_name)
-        model_ref = local_weight if os.path.isfile(local_weight) else model_name
-        run_name = f"{os.path.splitext(model_name)[0]}_6cls_e{epochs}"
+    try:
+        for model_name in models:
+            local_weight = os.path.join(base_dir, model_name)
+            default_ref = local_weight if os.path.isfile(local_weight) else model_name
+            run_name = f"{os.path.splitext(model_name)[0]}_6cls_e{epochs}"
+            run_dir = os.path.join(output_base_dir, run_name)
 
-        print(f"=== Memulai Pelatihan Deteksi: {model_name} ({epochs} epoch) ===")
-        model = YOLO(model_ref)
+            model_ref, should_resume, already_done = resolve_training_checkpoint(
+                run_dir=run_dir,
+                default_model_ref=default_ref,
+                target_epochs=epochs,
+            )
+            if already_done:
+                continue
 
-        model.train(
-            data=data_yaml,
-            epochs=epochs,
-            imgsz=imgsz,
-            device=device,
-            batch=batch_size,
-            workers=workers,
-            amp=amp,
-            cache=cache,
-            optimizer=optimizer,
-            lr0=lr0,
-            lrf=lrf,
-            warmup_epochs=warmup_epochs,
-            cos_lr=cos_lr,
-            patience=patience,
-            weight_decay=weight_decay,
-            close_mosaic=close_mosaic,
-            degrees=degrees,
-            translate=translate,
-            scale=scale,
-            shear=shear,
-            fliplr=fliplr,
-            mixup=mixup,
-            erasing=erasing,
-            save_period=save_period,
-            plots=plots,
-            project=output_base_dir,
-            name=run_name,
-            exist_ok=True,
-        )
-        print(f"=== Pelatihan {model_name} Selesai ===\n")
+            status_txt = "Melanjutkan (Resume)" if should_resume else "Memulai Baru"
+            print(f"=== {status_txt} Pelatihan Deteksi: {model_name} ({epochs} epoch) ===")
+            model = YOLO(model_ref)
+            model.add_callback("on_train_batch_end", thermal_guard.on_train_batch_end)
+            model.add_callback("on_train_epoch_end", thermal_guard.on_train_epoch_end)
 
-        del model
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+            try:
+                if should_resume:
+                    model.train(
+                        resume=True,
+                        imgsz=imgsz,
+                        device=device,
+                        batch=batch_size,
+                        workers=workers,
+                        save_period=save_period,
+                        plots=plots,
+                    )
+                else:
+                    model.train(
+                        data=data_yaml,
+                        epochs=epochs,
+                        imgsz=imgsz,
+                        device=device,
+                        batch=batch_size,
+                        workers=workers,
+                        amp=amp,
+                        cache=cache,
+                        optimizer=optimizer,
+                        lr0=lr0,
+                        lrf=lrf,
+                        warmup_epochs=warmup_epochs,
+                        cos_lr=cos_lr,
+                        patience=patience,
+                        weight_decay=weight_decay,
+                        close_mosaic=close_mosaic,
+                        degrees=degrees,
+                        translate=translate,
+                        scale=scale,
+                        shear=shear,
+                        fliplr=fliplr,
+                        mixup=mixup,
+                        erasing=erasing,
+                        save_period=save_period,
+                        plots=plots,
+                        project=output_base_dir,
+                        name=run_name,
+                        exist_ok=True,
+                    )
+                print(f"=== Pelatihan {model_name} Selesai ===\n")
+            except KeyboardInterrupt:
+                last_pt = os.path.join(run_dir, "weights", "last.pt")
+                print(
+                    f"\n[DIHENTIKAN USER] Training dihentikan. Progress epoch terakhir tersimpan di: {last_pt}\n"
+                    "Jalankan ulang script ini kapan saja untuk melanjutkan otomatis dari epoch terakhir."
+                )
+                break
+            finally:
+                del model
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+    finally:
+        thermal_guard.close()
 
 
 if __name__ == "__main__":
