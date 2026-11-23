@@ -34,6 +34,14 @@ v[0-9]*.[0-9]*.[0-9]*.md
 
 # ML Training Environment, Datasets, Checkpoints & Exported Models
 dataset/
+dataset_merged/
+models/
+training/yolo11s-pose/
+training/runs/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.cache
 *.zip
 ml_training/.venv/
 ml_training/venv/
