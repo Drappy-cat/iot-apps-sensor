@@ -424,6 +424,61 @@ app.get("/api/camera/timelapse", async (req, res) => {
   res.json({ source: "empty", count: 0, photos: [] });
 });
 
+// Proxy MJPEG Live Stream dari ESP32-CAM (Direct IP /stream)
+// Mengalirkan video ~18-20 FPS mulus ke browser tanpa masalah CORS
+app.get("/api/camera/stream", (req, res) => {
+  const targetIp = req.query.ip || process.env.ESP32_CAM_IP || "192.168.1.6";
+  const espUrl = `http://${targetIp}/stream`;
+
+  const proxyReq = http.get(espUrl, { timeout: 8000 }, (espRes) => {
+    res.writeHead(espRes.statusCode, {
+      ...espRes.headers,
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-cache, private",
+    });
+    espRes.pipe(res);
+  });
+
+  proxyReq.on("error", (err) => {
+    if (!res.headersSent) {
+      res.status(502).json({
+        error: "Gagal terhubung ke stream lokal ESP32-CAM",
+        target: espUrl,
+        message: err.message,
+      });
+    }
+  });
+
+  req.on("close", () => {
+    proxyReq.destroy();
+  });
+});
+
+// Proxy Foto Langsung dari ESP32-CAM (Direct IP /capture)
+app.get("/api/camera/direct-capture", (req, res) => {
+  const targetIp = req.query.ip || process.env.ESP32_CAM_IP || "192.168.1.6";
+  const espUrl = `http://${targetIp}/capture`;
+
+  const proxyReq = http.get(espUrl, { timeout: 8000 }, (espRes) => {
+    res.writeHead(espRes.statusCode, {
+      ...espRes.headers,
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+    });
+    espRes.pipe(res);
+  });
+
+  proxyReq.on("error", (err) => {
+    if (!res.headersSent) {
+      res.status(502).json({
+        error: "Gagal mengambil foto langsung dari ESP32-CAM",
+        target: espUrl,
+        message: err.message,
+      });
+    }
+  });
+});
+
 // 6. Mulai Server HTTP & WebSocket
 server.listen(PORT, () => {
   console.log("==================================================================");

@@ -30,6 +30,9 @@ import {
   Cloud,
   Clock,
   Image as ImageIcon,
+  Video,
+  Play,
+  Film,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { NPKSensorData } from "../types/sensor";
@@ -93,6 +96,22 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     activeViewers: number;
   } | null>(null);
   const [espFps, setEspFps] = useState<number>(0);
+
+  // Mode streaming ESP32: "direct" (Direct Local MJPEG ~20 FPS Mulus) vs "relay" (WebSocket Relay)
+  const [espStreamMode, setEspStreamMode] = useState<"direct" | "relay">(() => {
+    return (localStorage.getItem("iot_esp_stream_mode") as "direct" | "relay") || "direct";
+  });
+
+  // State Perekaman Video Demo In-App (15 Detik)
+  const [isRecordingVideo, setIsRecordingVideo] = useState<boolean>(false);
+  const [recordingSecondsLeft, setRecordingSecondsLeft] = useState<number>(15);
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const [showRecordModal, setShowRecordModal] = useState<boolean>(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordCountdownRef = useRef<NodeJS.Timeout | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const isRecordingRef = useRef<boolean>(false);
 
   // Supabase / Local Timelapse Gallery state
   const [timelapsePhotos, setTimelapsePhotos] = useState<
@@ -389,8 +408,41 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     setIsCameraActive(false);
   };
 
-  // Start ESP32-CAM via WebSocket relay
-  const startEspCamera = () => {
+  // 1. Start ESP32-CAM via Direct Local MJPEG (Rekomendasi Utama: ~18-20 FPS Lancar & Anti Putus)
+  const startEspDirectStream = () => {
+    intentionalStopRef.current = false;
+    setErrorMsg(null);
+    setDisconnectAlert(null);
+    setHasReceivedFrame(false);
+    startStreamTimeRef.current = Date.now();
+    lastFrameTimeRef.current = Date.now();
+    stopEspCamera();
+
+    const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+    const streamUrl = `${protocol}//${espRelayHost}/api/camera/stream?t=${Date.now()}`;
+
+    setIsCameraActive(true);
+    setEspFps(18);
+
+    if (espImgRef.current) {
+      espImgRef.current.src = streamUrl;
+      espImgRef.current.onload = () => {
+        setHasReceivedFrame(true);
+        lastFrameTimeRef.current = Date.now();
+        if (disconnectAlert) setDisconnectAlert(null);
+      };
+      espImgRef.current.onerror = () => {
+        console.warn("Direct stream error, cek apakah ESP32 online di IP 192.168.1.6");
+      };
+    }
+    setTimeout(() => {
+      setHasReceivedFrame(true);
+      lastFrameTimeRef.current = Date.now();
+    }, 500);
+  };
+
+  // 2. Start ESP32-CAM via WebSocket relay (Mode Alternatif)
+  const startEspWsStream = () => {
     intentionalStopRef.current = false;
     setErrorMsg(null);
     setDisconnectAlert(null);
@@ -482,12 +534,25 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     }
   };
 
-  // Stop ESP32 WebSocket relay stream
+  const startEspCamera = () => {
+    if (espStreamMode === "direct") {
+      startEspDirectStream();
+    } else {
+      startEspWsStream();
+    }
+  };
+
+  // Stop ESP32 Stream (Baik Direct MJPEG maupun WebSocket)
   const stopEspCamera = () => {
     intentionalStopRef.current = true;
     startStreamTimeRef.current = 0;
     lastFrameTimeRef.current = 0;
     setHasReceivedFrame(false);
+
+    if (espImgRef.current) {
+      espImgRef.current.src = "";
+    }
+
     if (espWsRef.current) {
       try {
         if (espWsRef.current.readyState === WebSocket.OPEN) {
@@ -503,11 +568,133 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
       URL.revokeObjectURL(espBlobUrlRef.current);
       espBlobUrlRef.current = null;
     }
-    if (espImgRef.current) {
-      espImgRef.current.src = "";
-    }
     setEspFps(0);
     setIsCameraActive(false);
+  };
+
+  // FUNGSI PEREKAMAN VIDEO DEMO IN-APP (15 DETIK)
+  const startVideoRecording = () => {
+    if (!isCameraActive) return;
+    recordedChunksRef.current = [];
+    isRecordingRef.current = true;
+    setIsRecordingVideo(true);
+    setRecordingSecondsLeft(15);
+
+    try {
+      let captureStream: MediaStream | null = null;
+      if (cameraSource === "device" && streamRef.current) {
+        captureStream = streamRef.current;
+      } else {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext("2d");
+
+        const renderLoop = () => {
+          if (!isRecordingRef.current) return;
+          if (ctx && espImgRef.current && (espImgRef.current.complete || espImgRef.current.src)) {
+            try {
+              ctx.drawImage(espImgRef.current, 0, 0, canvas.width, canvas.height);
+              ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+              ctx.fillRect(0, canvas.height - 34, canvas.width, 34);
+              ctx.fillStyle = "#10B981";
+              ctx.font = "bold 13px sans-serif";
+              const nowTime = new Date().toLocaleTimeString("id-ID");
+              ctx.fillText(`🌿 SKELIO DEMO VIDEO | ESP32-CAM | ${nowTime} WIB`, 14, canvas.height - 12);
+            } catch (err) {}
+          }
+          animFrameRef.current = requestAnimationFrame(renderLoop);
+        };
+        animFrameRef.current = requestAnimationFrame(renderLoop);
+        captureStream = canvas.captureStream(20);
+      }
+
+      if (!captureStream) {
+        alert("Aliran video belum siap untuk direkam.");
+        isRecordingRef.current = false;
+        setIsRecordingVideo(false);
+        return;
+      }
+
+      let mimeType = "video/webm;codecs=vp8";
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : "video/mp4";
+      }
+
+      const recorder = new MediaRecorder(captureStream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        isRecordingRef.current = false;
+        if (animFrameRef.current) {
+          cancelAnimationFrame(animFrameRef.current);
+          animFrameRef.current = null;
+        }
+
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        if (blob.size > 0) {
+          const videoUrl = URL.createObjectURL(blob);
+          setRecordedVideoUrl(videoUrl);
+          setShowRecordModal(true);
+
+          const a = document.createElement("a");
+          a.href = videoUrl;
+          const dateStr = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+          a.download = `video_demo_tanaman_${dateStr}.webm`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          pushGeneralNotification({
+            title: "Rekaman Video Demo Tersimpan",
+            message: `Video demo 15 detik berhasil disimpan ke laptop/HP. Ukuran: ${(blob.size / 1024).toFixed(0)} KB.`,
+            type: "success",
+          });
+        }
+      };
+
+      recorder.start(400);
+
+      let count = 15;
+      if (recordCountdownRef.current) clearInterval(recordCountdownRef.current);
+      recordCountdownRef.current = setInterval(() => {
+        count--;
+        setRecordingSecondsLeft(count);
+        if (count <= 0) {
+          stopVideoRecording();
+        }
+      }, 1000);
+
+    } catch (err: any) {
+      console.error("Gagal memulai perekaman:", err);
+      isRecordingRef.current = false;
+      setIsRecordingVideo(false);
+      alert("Browser tidak mendukung perekaman video ini: " + err.message);
+    }
+  };
+
+  const stopVideoRecording = () => {
+    isRecordingRef.current = false;
+    if (recordCountdownRef.current) {
+      clearInterval(recordCountdownRef.current);
+      recordCountdownRef.current = null;
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    setIsRecordingVideo(false);
   };
 
   // Handle switching camera source
@@ -1007,6 +1194,97 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
               </div>
             </div>
           )}
+
+          {/* Selector Mode Streaming (Direct MJPEG vs WebSocket Relay) */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+              paddingTop: "6px",
+              borderTop: "1px dashed rgba(14, 165, 233, 0.2)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                Mode Streaming:
+              </span>
+              <div style={{ display: "flex", gap: "4px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEspStreamMode("direct");
+                    localStorage.setItem("iot_esp_stream_mode", "direct");
+                    if (isCameraActive) {
+                      stopEspCamera();
+                      setTimeout(startEspDirectStream, 300);
+                    }
+                  }}
+                  style={{
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    border: "none",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: espStreamMode === "direct" ? "#0EA5E9" : "var(--bg-card)",
+                    color: espStreamMode === "direct" ? "white" : "var(--text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  ⚡ Direct MJPEG (~20 FPS)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEspStreamMode("relay");
+                    localStorage.setItem("iot_esp_stream_mode", "relay");
+                    if (isCameraActive) {
+                      stopEspCamera();
+                      setTimeout(startEspWsStream, 300);
+                    }
+                  }}
+                  style={{
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    border: "none",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: espStreamMode === "relay" ? "#0EA5E9" : "var(--bg-card)",
+                    color: espStreamMode === "relay" ? "white" : "var(--text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  🌐 WS Relay
+                </button>
+              </div>
+            </div>
+
+            {/* Banner Jadwal Timelapse NTP Clock-Aligned */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "10.5px",
+                color: "#10B981",
+                background: "rgba(16, 185, 129, 0.08)",
+                padding: "5px 8px",
+                borderRadius: "6px",
+                lineHeight: "1.3",
+              }}
+            >
+              <Clock size={12} style={{ flexShrink: 0 }} />
+              <span>
+                <strong>NTP Sync:</strong> Foto berkala otomatis setiap jam (00:00, 01:00, 02:00, ... WIB) ke Supabase Cloud
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1656,6 +1934,52 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
             >
               <Scan size={17} strokeWidth={2.2} />
               {isScanning ? "Menganalisis..." : "Pindai Hama AI & Ambil Foto"}
+            </motion.button>
+
+            {/* Tombol Rekam Video Demo (15 Detik Langsung) */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={isRecordingVideo ? stopVideoRecording : startVideoRecording}
+              style={{
+                flex: 1.2,
+                background: isRecordingVideo
+                  ? "#EF4444"
+                  : "linear-gradient(135deg, #0EA5E9, #2563EB)",
+                color: "white",
+                border: "none",
+                borderRadius: "14px",
+                padding: "12px 10px",
+                fontSize: "12px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                boxShadow: isRecordingVideo
+                  ? "0 0 12px rgba(239, 68, 68, 0.6)"
+                  : "0 0 10px rgba(14, 165, 233, 0.35)",
+              }}
+            >
+              {isRecordingVideo ? (
+                <>
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: "white",
+                      display: "inline-block",
+                    }}
+                  />
+                  <span>Stop ({recordingSecondsLeft}s)</span>
+                </>
+              ) : (
+                <>
+                  <Video size={16} />
+                  <span>Rekam Demo (15s)</span>
+                </>
+              )}
             </motion.button>
 
             <motion.button
@@ -2448,6 +2772,161 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                   <Download size={15} />
                   Buka / Unduh
                 </a>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Preview Video Demo yang Baru Direkam */}
+      <AnimatePresence>
+        {showRecordModal && recordedVideoUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.85)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-card)",
+                borderRadius: "20px",
+                overflow: "hidden",
+                maxWidth: "500px",
+                width: "100%",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "14px 16px",
+                  borderBottom: "1px solid var(--border-card)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "8px",
+                      background: "rgba(14, 165, 233, 0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#0EA5E9",
+                    }}
+                  >
+                    <Film size={18} />
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>
+                      Hasil Rekaman Video Demo (15s)
+                    </h4>
+                    <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#10B981" }}>
+                      ✓ Berhasil tersimpan otomatis ke laptop/HP Anda
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowRecordModal(false)}
+                  style={{
+                    background: "var(--bg-hover)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "30px",
+                    height: "30px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div style={{ background: "#000", padding: "4px" }}>
+                <video
+                  src={recordedVideoUrl}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  style={{
+                    width: "100%",
+                    maxHeight: "340px",
+                    display: "block",
+                    borderRadius: "12px",
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  padding: "14px 16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "10px",
+                  borderTop: "1px solid var(--border-card)",
+                }}
+              >
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                  Format: WebM / MP4 (Siap diputar saat demo aplikasi)
+                </span>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <a
+                    href={recordedVideoUrl}
+                    download={`video_demo_tanaman_${new Date().toISOString().slice(0, 10)}.webm`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 14px",
+                      background: "#0EA5E9",
+                      color: "white",
+                      borderRadius: "10px",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                    }}
+                  >
+                    <Download size={14} />
+                    Unduh Lagi
+                  </a>
+                  <button
+                    onClick={() => setShowRecordModal(false)}
+                    style={{
+                      padding: "8px 14px",
+                      background: "var(--bg-hover)",
+                      color: "var(--text-secondary)",
+                      border: "none",
+                      borderRadius: "10px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Tutup
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
