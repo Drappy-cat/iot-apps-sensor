@@ -54,26 +54,27 @@ DATASET_MAPPING = {
 
 
 class GpuThermalGuard:
-    """Menjaga suhu GPU di bawah batas aman dengan throttling adaptif dan jeda otomatis."""
+    """Menjaga suhu GPU di bawah batas aman tanpa memperlambat training saat suhu normal."""
 
     def __init__(
         self,
         device_index: int = 0,
         max_temp_c: int = 75,
-        resume_temp_c: int = 72,
-        throttle_temp_c: int = 69,
-        check_interval_sec: float = 2.0,
-        poll_interval_sec: float = 3.0,
-        epoch_cooldown_sec: float = 8.0,
+        resume_temp_c: int = 70,
+        soft_throttle_temp_c: int = 72,
+        check_every_n_batches: int = 4,
+        poll_interval_sec: float = 2.0,
+        epoch_cooldown_sec: float = 3.0,
     ) -> None:
         self.device_index = device_index
         self.max_temp_c = max_temp_c
         self.resume_temp_c = min(resume_temp_c, max_temp_c - 1)
-        self.throttle_temp_c = throttle_temp_c
-        self.check_interval_sec = check_interval_sec
+        self.soft_throttle_temp_c = soft_throttle_temp_c
+        self.check_every_n_batches = max(1, check_every_n_batches)
         self.poll_interval_sec = poll_interval_sec
         self.epoch_cooldown_sec = epoch_cooldown_sec
-        self._last_check = 0.0
+        self._batch_counter = 0
+        self._last_status_log = 0.0
         self._nvml_handle = None
 
         if pynvml is not None and torch.cuda.is_available():
@@ -113,18 +114,27 @@ class GpuThermalGuard:
         except Exception:
             return None
 
-    def _release_gpu_idle(self) -> None:
-        """Menghentikan antrean kernel GPU agar suhu cepat turun saat dijeda."""
+    def get_power_w(self) -> float | None:
+        """Membaca konsumsi daya GPU saat ini (Watt)."""
+        if self._nvml_handle is not None:
+            try:
+                return pynvml.nvmlDeviceGetPowerUsage(self._nvml_handle) / 1000.0
+            except Exception:
+                pass
+        return None
+
+    def _free_vram_cache(self) -> None:
+        """Membersihkan cache VRAM di akhir epoch atau saat thermal stop."""
         if torch.cuda.is_available():
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
 
     def _wait_until_cool(self, current_temp: int) -> None:
-        """Menjeda training saat suhu >= max_temp_c hingga turun di bawah batas aman."""
-        self._release_gpu_idle()
+        """Menjeda training saat suhu >= max_temp_c hingga turun ke target aman."""
+        self._free_vram_cache()
         print(
-            f"\n[THERMAL STOP] Suhu GPU mencapai {current_temp}°C (>= {self.max_temp_c}°C). "
-            f"Training dijeda sementara dan akan lanjut otomatis saat suhu <= {self.resume_temp_c}°C (< {self.max_temp_c}°C)..."
+            f"\n[THERMAL STOP] Suhu GPU {current_temp}°C (>= {self.max_temp_c}°C). "
+            f"Jeda sebentar hingga suhu <= {self.resume_temp_c}°C (< {self.max_temp_c}°C)..."
         )
         last_log = time.monotonic()
         while True:
@@ -132,21 +142,22 @@ class GpuThermalGuard:
             temp = self.get_temp_c()
             if temp is None or temp <= self.resume_temp_c:
                 print(
-                    f"[THERMAL RESUME] Suhu GPU turun ke {temp}°C (< {self.max_temp_c}°C). Melanjutkan training...\n"
+                    f"[THERMAL RESUME] Suhu GPU turun ke {temp}°C (< {self.max_temp_c}°C). Lanjut training!\n"
                 )
-                self._last_check = time.monotonic()
                 return
             now = time.monotonic()
-            if now - last_log >= 12.0:
-                print(f"[THERMAL COOLING] Suhu GPU saat ini: {temp}°C (target <= {self.resume_temp_c}°C)...")
+            if now - last_log >= 8.0:
+                print(f"[THERMAL COOLING] Suhu GPU: {temp}°C (target <= {self.resume_temp_c}°C)...")
                 last_log = now
 
-    def on_train_batch_end(self, trainer) -> None:
-        """Callback tiap batch: throttling ringan saat hangat dan auto-pause jika >= max_temp_c."""
-        now = time.monotonic()
-        if now - self._last_check < self.check_interval_sec:
+    def _throttle_step(self) -> None:
+        """Kecepatan penuh saat < 72°C; jeda ringan hanya di 72-74°C; auto-stop >= 75°C."""
+        if not torch.cuda.is_available():
             return
-        self._last_check = now
+
+        self._batch_counter += 1
+        if self._batch_counter % self.check_every_n_batches != 0:
+            return
 
         temp = self.get_temp_c()
         if temp is None:
@@ -154,24 +165,41 @@ class GpuThermalGuard:
 
         if temp >= self.max_temp_c:
             self._wait_until_cool(temp)
-        elif temp >= self.throttle_temp_c:
-            # Jeda singkat adaptif agar beban GPU & panas tetap terjaga di bawah 75°C
-            self._release_gpu_idle()
-            ratio = (temp - self.throttle_temp_c + 1) / max(1, self.max_temp_c - self.throttle_temp_c)
-            time.sleep(0.25 + 0.55 * ratio)
+            return
+
+        if temp >= self.soft_throttle_temp_c:
+            torch.cuda.synchronize()
+            time.sleep(0.08)
+
+        now = time.monotonic()
+        if now - self._last_status_log >= 45.0:
+            pwr = self.get_power_w()
+            pwr_str = f" | Daya: {pwr:.1f}W" if pwr is not None else ""
+            mode = "throttle ringan" if temp >= self.soft_throttle_temp_c else "kecepatan penuh"
+            print(f"[THERMAL MONITOR] Suhu GPU: {temp}°C{pwr_str} | Mode: {mode}")
+            self._last_status_log = now
+
+    def on_train_batch_end(self, trainer) -> None:
+        """Callback tiap batch training."""
+        self._throttle_step()
+
+    def on_val_batch_end(self, validator) -> None:
+        """Callback tiap batch validasi."""
+        self._throttle_step()
 
     def on_train_epoch_end(self, trainer) -> None:
-        """Callback akhir epoch: pendinginan sejenak antar epoch agar laptop tidak overheat."""
-        self._release_gpu_idle()
+        """Callback akhir epoch: bersihkan VRAM & jeda singkat antar epoch."""
+        self._free_vram_cache()
         temp = self.get_temp_c()
         epoch_num = getattr(trainer, "epoch", 0) + 1
         total_epochs = getattr(trainer, "epochs", "?")
         if temp is not None:
-            print(f"[THERMAL] Selesai Epoch {epoch_num}/{total_epochs} | Suhu GPU: {temp}°C | Pendinginan {self.epoch_cooldown_sec:.0f}s...")
-        time.sleep(self.epoch_cooldown_sec)
-        temp_after = self.get_temp_c()
-        if temp_after is not None and temp_after >= self.max_temp_c:
-            self._wait_until_cool(temp_after)
+            print(f"[THERMAL] Selesai Epoch {epoch_num}/{total_epochs} | Suhu GPU: {temp}°C")
+            if temp >= self.max_temp_c:
+                self._wait_until_cool(temp)
+                return
+        if self.epoch_cooldown_sec > 0:
+            time.sleep(self.epoch_cooldown_sec)
 
     def close(self) -> None:
         if self._nvml_handle is not None and pynvml is not None:
@@ -346,7 +374,8 @@ def resolve_training_checkpoint(
 
 
 def train_yolo_batch() -> None:
-    """Melakukan training deteksi objek YOLOv11 dengan auto-resume & proteksi suhu GPU."""
+    """Melakukan training deteksi objek YOLOv11 dengan kecepatan optimal & proteksi suhu GPU."""
+    torch.set_num_threads(4)
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
 
@@ -363,33 +392,33 @@ def train_yolo_batch() -> None:
     imgsz = 640
     device = 0 if torch.cuda.is_available() else "cpu"
     optimizer = "AdamW"
-    batch_size = 8
-    workers = 2  # Sedikit worker agar beban CPU & panas laptop tetap rendah
+    batch_size = 16  # 696 iter/epoch (4x lebih cepat dari batch=4, ~3.45 GB dari 6 GB VRAM)
+    workers = 2      # DataLoader paralel secukupnya agar GPU tidak menunggu CPU
     amp = True
     cache = False
-    save_period = 5  # Simpan checkpoint berkala tiap 5 epoch (last.pt & best.pt tetap disimpan tiap epoch)
+    save_period = 5
     plots = True
 
-    # Pengaturan batas suhu GPU & pendinginan otomatis
-    max_gpu_temp_c = 75       # Auto stop (jeda) jika suhu >= 75°C
-    resume_gpu_temp_c = 72    # Lanjut otomatis setelah suhu <= 72°C (di bawah 75°C)
-    throttle_gpu_temp_c = 69  # Mulai jeda adaptif ringan di 69°C agar tidak cepat menyentuh 75°C
-    epoch_cooldown_sec = 8.0  # Istirahat 8 detik setiap selesai 1 epoch
+    # Pengaturan batas suhu GPU: cepat saat dingin, rem ringan di 72°C, auto-stop di 75°C
+    max_gpu_temp_c = 75
+    resume_gpu_temp_c = 70
+    soft_throttle_temp_c = 72
+    epoch_cooldown_sec = 3.0
 
     lr0 = 0.0010
     lrf = 0.01
     warmup_epochs = 3.0
     cos_lr = True
-    patience = 20
+    patience = 15
     weight_decay = 0.001
-    close_mosaic = 10
+    close_mosaic = 15
 
-    degrees = 15.0
+    degrees = 10.0
     translate = 0.1
     scale = 0.5
-    shear = 2.0
+    shear = 0.0
     fliplr = 0.5
-    mixup = 0.1
+    mixup = 0.0
     erasing = 0.2
 
     output_base_dir = os.path.join(base_dir, "models", "trained_weights")
@@ -399,7 +428,7 @@ def train_yolo_batch() -> None:
         device_index=device if isinstance(device, int) else 0,
         max_temp_c=max_gpu_temp_c,
         resume_temp_c=resume_gpu_temp_c,
-        throttle_temp_c=throttle_gpu_temp_c,
+        soft_throttle_temp_c=soft_throttle_temp_c,
         epoch_cooldown_sec=epoch_cooldown_sec,
     )
 
@@ -435,6 +464,7 @@ def train_yolo_batch() -> None:
             print(f"=== {status_txt} Pelatihan Deteksi: {model_name} ({epochs} epoch) ===")
             model = YOLO(model_ref)
             model.add_callback("on_train_batch_end", thermal_guard.on_train_batch_end)
+            model.add_callback("on_val_batch_end", thermal_guard.on_val_batch_end)
             model.add_callback("on_train_epoch_end", thermal_guard.on_train_epoch_end)
 
             try:
