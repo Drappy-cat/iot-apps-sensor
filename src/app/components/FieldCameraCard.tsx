@@ -930,48 +930,81 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
             <div
               style={{
                 display: "flex",
-                gap: "6px",
+                flexDirection: "column",
+                gap: "8px",
                 paddingTop: "6px",
                 borderTop: "1px dashed rgba(14, 165, 233, 0.2)",
               }}
             >
-              <input
-                type="text"
-                value={customHostInput}
-                onChange={(e) => setCustomHostInput(e.target.value)}
-                placeholder="misal: localhost:5000 atau 192.168.1.50:5000"
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  type="text"
+                  value={customHostInput}
+                  onChange={(e) => setCustomHostInput(e.target.value)}
+                  placeholder="Host Relay (misal: localhost:5000)"
+                  style={{
+                    flex: 1,
+                    background: "var(--bg-card)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-card)",
+                    borderRadius: "8px",
+                    padding: "5px 8px",
+                    fontSize: "11px",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cleaned = customHostInput.trim() || "localhost:5000";
+                    setEspRelayHost(cleaned);
+                    localStorage.setItem("iot_esp_relay_host", cleaned);
+                    setShowRelaySettings(false);
+                  }}
+                  style={{
+                    background: "#0EA5E9",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Simpan
+                </button>
+              </div>
+
+              {/* Direct Offline IP Quick Link */}
+              <div
                 style={{
-                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   background: "var(--bg-card)",
-                  color: "var(--text-primary)",
                   border: "1px solid var(--border-card)",
                   borderRadius: "8px",
-                  padding: "5px 8px",
+                  padding: "6px 8px",
                   fontSize: "11px",
-                  outline: "none",
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const cleaned = customHostInput.trim() || "localhost:5000";
-                  setEspRelayHost(cleaned);
-                  localStorage.setItem("iot_esp_relay_host", cleaned);
-                  setShowRelaySettings(false);
-                }}
-                style={{
-                  background: "#0EA5E9",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "5px 10px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  cursor: "pointer",
                 }}
               >
-                Simpan
-              </button>
+                <span style={{ color: "var(--text-muted)" }}>
+                  🌐 Portal Web Diagnostik Offline:
+                </span>
+                <a
+                  href="http://192.168.1.6/"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    color: "#0EA5E9",
+                    fontWeight: 700,
+                    textDecoration: "underline",
+                  }}
+                >
+                  Buka http://192.168.1.6/ ↗
+                </a>
+              </div>
             </div>
           )}
         </div>
