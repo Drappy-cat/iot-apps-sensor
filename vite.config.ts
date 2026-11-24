@@ -20,6 +20,7 @@ export default defineConfig({
           'vendor-charts': ['recharts'],
           'vendor-pdf': ['jspdf', 'jspdf-autotable'],
           'vendor-motion': ['motion'],
+          'vendor-firebase': ['firebase/app', 'firebase/database'],
         },
       },
     },

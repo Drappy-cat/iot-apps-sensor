@@ -154,14 +154,14 @@ const DEV_ROUTES: DevRouteItem[] = [
   },
   {
     id: "offline",
-    name: "Monitoring Offline (USB)",
+    name: "Pantauan Sensor (Online & Offline)",
     path: "/offline",
     category: "iot",
     categoryLabel: "Monitoring & IoT",
     icon: Usb,
-    color: "#2563EB",
-    badge: "Web Serial + IDB",
-    description: "Monitoring sensor tanah 7-in-1 via USB Serial (Modbus RTU Slave 4) tanpa internet, simpan ke IndexedDB lokal, dan sinkronkan ke Firebase.",
+    color: "#10B981",
+    badge: "Firebase + Serial",
+    description: "Pantauan sensor tanah 7-in-1 real-time: Mode Online via Firebase RTDB (test_kalibrasi 4 titik sejak 00:30) & Mode Offline via USB Modbus Serial.",
     testChecklist: [
       "Koneksi Web Serial API (Chrome/Edge)",
       "Pembacaan data realtime dari Arduino Uno R3",

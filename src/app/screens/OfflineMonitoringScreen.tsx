@@ -110,6 +110,157 @@ export function OfflineMonitoringScreen() {
   // Filter Grafik (Kelembaban, Suhu, pH)
   const [selectedMetric, setSelectedMetric] = useState<"moisture" | "temperature" | "ph">("moisture");
 
+  // Mode Pantauan: "online" (Cloud Firebase RTDB) vs "offline" (USB Serial Modbus)
+  const [monitoringTab, setMonitoringTab] = useState<"online" | "offline">(() => {
+    const saved = localStorage.getItem("iot_monitoring_view_tab");
+    return (saved as "online" | "offline") || "online";
+  });
+
+  // State Data Firebase Realtime Database
+  const [firebaseLatest, setFirebaseLatest] = useState<{
+    AvgMoisture: number;
+    DateTime: string;
+    Debit: number;
+    MaxLimitReached: boolean;
+    TotalDebit: number;
+    ValveStatus: string;
+    sensor_1?: { Conductivity: number; K: number; Moisture: number; N: number; P: number; PH: number; Temperature: number };
+    sensor_2?: { Conductivity: number; K: number; Moisture: number; N: number; P: number; PH: number; Temperature: number };
+    sensor_3?: { Conductivity: number; K: number; Moisture: number; N: number; P: number; PH: number; Temperature: number };
+    sensor_4?: { Conductivity: number; K: number; Moisture: number; N: number; P: number; PH: number; Temperature: number };
+  } | null>(null);
+  const [firebaseOnlineStatus, setFirebaseOnlineStatus] = useState<"connected" | "fetching" | "error">("fetching");
+  const [activeSensorNode, setActiveSensorNode] = useState<"all" | "sensor_1" | "sensor_2" | "sensor_3" | "sensor_4">("all");
+  const [todayHistoryRecords, setTodayHistoryRecords] = useState<Array<{
+    key: string;
+    time: string;
+    timestamp: string;
+    avgMoisture: number;
+    valveStatus: string;
+    debit: number;
+    s1_moisture: number;
+    s1_temp: number;
+    s1_ph: number;
+    s1_ec: number;
+    s2_moisture: number;
+    s3_moisture: number;
+    s4_moisture: number;
+  }>>([]);
+  const [isFetchingToday, setIsFetchingToday] = useState<boolean>(false);
+  const [onlineMetric, setOnlineMetric] = useState<"moisture" | "temperature" | "ph">("moisture");
+
+  const FIREBASE_BASE_URL = "https://agriculture-esp32-2f547-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+  const fetchOnlineLatest = useCallback(async () => {
+    try {
+      const res = await fetch(`${FIREBASE_BASE_URL}/test_kalibrasi/latest.json`, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (data) {
+        setFirebaseLatest(data);
+        setFirebaseOnlineStatus("connected");
+      }
+    } catch (err) {
+      console.warn("Gagal mengambil data terbaru dari Firebase:", err);
+      setFirebaseOnlineStatus("error");
+    }
+  }, []);
+
+  const fetchTodayHistory = useCallback(async () => {
+    setIsFetchingToday(true);
+    try {
+      const todayDate = new Date().toISOString().slice(0, 10);
+      const [resBaseline, resLatest] = await Promise.all([
+        fetch(
+          `${FIREBASE_BASE_URL}/test_kalibrasi/readings/${todayDate}.json?orderBy="%24key"&startAt="%2200-30-00%22"&limitToFirst=15`,
+          { cache: "no-store" }
+        ),
+        fetch(
+          `${FIREBASE_BASE_URL}/test_kalibrasi/readings/${todayDate}.json?orderBy="%24key"&limitToLast=25`,
+          { cache: "no-store" }
+        ),
+      ]);
+
+      const dataBaseline = resBaseline.ok ? await resBaseline.json() : {};
+      const dataLatest = resLatest.ok ? await resLatest.json() : {};
+      const merged = { ...dataBaseline, ...dataLatest };
+
+      const parsedRecords = Object.keys(merged)
+        .sort()
+        .filter((k) => k >= "00-30")
+        .map((k) => {
+          const item = merged[k];
+          const timeFormatted = k.replace(/-/g, ":");
+          return {
+            key: k,
+            time: timeFormatted,
+            timestamp: item.DateTime || `${todayDate} ${timeFormatted}`,
+            avgMoisture: Number(item.AvgMoisture ?? 0),
+            valveStatus: item.ValveStatus || "CLOSED",
+            debit: Number(item.Debit ?? 0),
+            s1_moisture: Number(item.sensor_1?.Moisture ?? 0),
+            s1_temp: Number(item.sensor_1?.Temperature ?? 0),
+            s1_ph: Number(item.sensor_1?.PH ?? 0),
+            s1_ec: Number(item.sensor_1?.Conductivity ?? 0),
+            s2_moisture: Number(item.sensor_2?.Moisture ?? 0),
+            s3_moisture: Number(item.sensor_3?.Moisture ?? 0),
+            s4_moisture: Number(item.sensor_4?.Moisture ?? 0),
+          };
+        });
+
+      setTodayHistoryRecords(parsedRecords);
+    } catch (err) {
+      console.warn("Gagal memuat riwayat hari ini:", err);
+    } finally {
+      setIsFetchingToday(false);
+    }
+  }, []);
+
+  // Poll data online Firebase saat tab === online
+  useEffect(() => {
+    if (monitoringTab !== "online") return;
+
+    fetchOnlineLatest();
+    fetchTodayHistory();
+
+    const interval = setInterval(fetchOnlineLatest, 3000);
+    const historyInterval = setInterval(fetchTodayHistory, 30000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(historyInterval);
+    };
+  }, [monitoringTab, fetchOnlineLatest, fetchTodayHistory]);
+
+  // Hitung data aktif berdasarkan sensor yang dipilih (all, sensor_1, sensor_2, sensor_3, sensor_4)
+  const activeOnlineData = useMemo(() => {
+    if (!firebaseLatest) return null;
+    if (activeSensorNode === "sensor_1") return firebaseLatest.sensor_1 || null;
+    if (activeSensorNode === "sensor_2") return firebaseLatest.sensor_2 || null;
+    if (activeSensorNode === "sensor_3") return firebaseLatest.sensor_3 || null;
+    if (activeSensorNode === "sensor_4") return firebaseLatest.sensor_4 || null;
+
+    // Rata-rata 4 titik
+    const s = [firebaseLatest.sensor_1, firebaseLatest.sensor_2, firebaseLatest.sensor_3, firebaseLatest.sensor_4].filter(
+      Boolean
+    ) as Array<{ Conductivity: number; K: number; Moisture: number; N: number; P: number; PH: number; Temperature: number }>;
+
+    if (s.length === 0) return null;
+
+    const avg = (fn: (item: any) => number) =>
+      +(s.reduce((acc, curr) => acc + (fn(curr) || 0), 0) / s.length).toFixed(1);
+
+    return {
+      Moisture: firebaseLatest.AvgMoisture ?? avg((i) => i.Moisture),
+      Temperature: avg((i) => i.Temperature),
+      PH: avg((i) => i.PH),
+      Conductivity: Math.round(s.reduce((acc, curr) => acc + (curr.Conductivity || 0), 0) / s.length),
+      N: Math.round(s.reduce((acc, curr) => acc + (curr.N || 0), 0) / s.length),
+      P: Math.round(s.reduce((acc, curr) => acc + (curr.P || 0), 0) / s.length),
+      K: Math.round(s.reduce((acc, curr) => acc + (curr.K || 0), 0) / s.length),
+    };
+  }, [firebaseLatest, activeSensorNode]);
+
   // Load awal & cek dukungan Web Serial
   useEffect(() => {
     const supported = webSerialService.isSupported();
@@ -462,7 +613,7 @@ export function OfflineMonitoringScreen() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={{ fontSize: "19px", fontWeight: 700, color: "var(--text-heading)" }}>
-                Monitoring Offline
+                Pantauan Sensor
               </span>
               <span
                 style={{
@@ -470,16 +621,18 @@ export function OfflineMonitoringScreen() {
                   fontWeight: 700,
                   padding: "2px 6px",
                   borderRadius: "6px",
-                  background: "#DBEAFE",
-                  color: "#1E40AF",
+                  background: monitoringTab === "online" ? "rgba(16, 185, 129, 0.15)" : "#DBEAFE",
+                  color: monitoringTab === "online" ? "#059669" : "#1E40AF",
                   letterSpacing: "0.5px",
                 }}
               >
-                USB SERIAL
+                {monitoringTab === "online" ? "CLOUD RTDB" : "USB SERIAL"}
               </span>
             </div>
             <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}>
-              Modbus RTU RS485 • Slave ID 4
+              {monitoringTab === "online"
+                ? "Realtime Database • 4 Sensor Multi-Titik & Valve"
+                : "Modbus RTU RS485 • Slave ID 4"}
             </p>
           </div>
         </div>
@@ -522,7 +675,755 @@ export function OfflineMonitoringScreen() {
       {/* Konten Utama */}
       <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "16px" }}>
         
-        {/* Peringatan Browser jika Web Serial API tidak didukung */}
+        {/* Switcher Mode: Pantauan Online (Firebase RTDB Cloud) vs Pantauan Offline (USB Modbus) */}
+        <div
+          style={{
+            display: "flex",
+            background: "var(--bg-card)",
+            borderRadius: "16px",
+            padding: "5px",
+            gap: "6px",
+            border: "1px solid var(--border-subtle)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              hapticLight();
+              setMonitoringTab("online");
+              localStorage.setItem("iot_monitoring_view_tab", "online");
+            }}
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              border: "none",
+              fontSize: "12.5px",
+              fontWeight: monitoringTab === "online" ? 700 : 500,
+              background:
+                monitoringTab === "online" ? "linear-gradient(135deg, #10B981, #059669)" : "transparent",
+              color: monitoringTab === "online" ? "#FFFFFF" : "var(--text-muted)",
+              boxShadow: monitoringTab === "online" ? "0 4px 12px rgba(16, 185, 129, 0.28)" : "none",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <Cloud size={16} />
+            <span>Pantauan Online (Firebase RTDB)</span>
+            {firebaseOnlineStatus === "connected" && (
+              <span
+                style={{
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  background: "#86EFAC",
+                  boxShadow: "0 0 6px #86EFAC",
+                }}
+              />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              hapticLight();
+              setMonitoringTab("offline");
+              localStorage.setItem("iot_monitoring_view_tab", "offline");
+            }}
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              padding: "10px 12px",
+              borderRadius: "12px",
+              border: "none",
+              fontSize: "12.5px",
+              fontWeight: monitoringTab === "offline" ? 700 : 500,
+              background:
+                monitoringTab === "offline" ? "linear-gradient(135deg, #3B82F6, #2563EB)" : "transparent",
+              color: monitoringTab === "offline" ? "#FFFFFF" : "var(--text-muted)",
+              boxShadow: monitoringTab === "offline" ? "0 4px 12px rgba(59, 130, 246, 0.28)" : "none",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <Usb size={16} />
+            <span>Pantauan Offline (USB Modbus)</span>
+            {connectionStatus === "connected" && (
+              <span
+                style={{
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  background: "#93C5FD",
+                  boxShadow: "0 0 6px #93C5FD",
+                }}
+              />
+            )}
+          </button>
+        </div>
+
+        {/* TAMPILAN MODE ONLINE: REALTIME DATABASE FIREBASE */}
+        {monitoringTab === "online" ? (
+          <>
+            {/* Status Koneksi Cloud Firebase RTDB */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "18px",
+                padding: "16px",
+                boxShadow: "var(--glow-card)",
+                border: "1px solid var(--border-subtle)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "12px",
+                      background: "rgba(16, 185, 129, 0.12)",
+                      color: "#10B981",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Cloud size={20} />
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <h4 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
+                        Firebase Realtime Database
+                      </h4>
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: "6px",
+                          background:
+                            firebaseOnlineStatus === "connected"
+                              ? "rgba(34, 197, 94, 0.15)"
+                              : "rgba(239, 68, 68, 0.15)",
+                          color: firebaseOnlineStatus === "connected" ? "#16A34A" : "#EF4444",
+                        }}
+                      >
+                        {firebaseOnlineStatus === "connected" ? "LIVE" : "DISCONNECTED"}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "2px 0 0" }}>
+                      asia-southeast1 • Node: test_kalibrasi
+                    </p>
+                  </div>
+                </div>
+
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    hapticLight();
+                    fetchOnlineLatest();
+                    fetchTodayHistory();
+                  }}
+                  title="Segarkan Data Realtime"
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid var(--border-subtle)",
+                    background: "var(--bg-hover)",
+                    color: "var(--text-primary)",
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <RefreshCw size={13} className={isFetchingToday ? "spin" : ""} />
+                  <span>Segarkan</span>
+                </motion.button>
+              </div>
+
+              {/* URL & Waktu Terakhir */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "var(--bg-app)",
+                  borderRadius: "10px",
+                  padding: "8px 12px",
+                  fontSize: "11px",
+                  color: "var(--text-muted)",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Globe size={13} color="#3B82F6" />
+                  <span style={{ fontFamily: "monospace" }}>agriculture-esp32-2f547...app</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Clock size={13} color="#10B981" />
+                  <span>Update: <strong>{firebaseLatest?.DateTime || "--"}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Kartu Ringkasan Sistem Irigasi & Katup Solenoid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: "10px",
+              }}
+            >
+              {/* Rata-rata Kelembaban */}
+              <div
+                style={{
+                  background: "var(--bg-card)",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  border: "1px solid var(--border-subtle)",
+                  boxShadow: "var(--glow-card)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)", fontSize: "11.5px" }}>
+                  <Droplets size={14} color="#3B82F6" />
+                  <span>Rata-rata Lengas</span>
+                </div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-heading)" }}>
+                  {firebaseLatest?.AvgMoisture !== undefined ? `${firebaseLatest.AvgMoisture.toFixed(1)}%` : "--"}
+                </div>
+                <span style={{ fontSize: "10.5px", color: "#16A34A", fontWeight: 600 }}>
+                  Optimal 50 - 80%
+                </span>
+              </div>
+
+              {/* Status Katup Solenoid */}
+              <div
+                style={{
+                  background: "var(--bg-card)",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  border: "1px solid var(--border-subtle)",
+                  boxShadow: "var(--glow-card)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)", fontSize: "11.5px" }}>
+                  <Zap size={14} color="#F59E0B" />
+                  <span>Katup Irigasi</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 800,
+                      padding: "4px 8px",
+                      borderRadius: "8px",
+                      background:
+                        firebaseLatest?.ValveStatus === "OPEN"
+                          ? "rgba(34, 197, 94, 0.15)"
+                          : "rgba(100, 116, 139, 0.15)",
+                      color: firebaseLatest?.ValveStatus === "OPEN" ? "#16A34A" : "#64748B",
+                    }}
+                  >
+                    {firebaseLatest?.ValveStatus === "OPEN" ? "TERBUKA (ON)" : "TERTUTUP (OFF)"}
+                  </span>
+                </div>
+                <span style={{ fontSize: "10.5px", color: "var(--text-muted)" }}>
+                  Debit: {firebaseLatest?.Debit !== undefined ? `${firebaseLatest.Debit.toFixed(1)} L/m` : "0.0 L/m"}
+                </span>
+              </div>
+            </div>
+
+            {/* Selector Titik Sensor (4 Titik Multi-Zone) */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "18px",
+                padding: "14px",
+                border: "1px solid var(--border-subtle)",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-heading)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Layers size={15} color="#10B981" />
+                  Pilih Zona / Titik Sensor
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                  4 Sensor 7-in-1 Aktif
+                </span>
+              </div>
+
+              {/* Pill Switcher */}
+              <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
+                {[
+                  { id: "all", label: "🌐 Rata-rata" },
+                  { id: "sensor_1", label: "📍 Titik 1" },
+                  { id: "sensor_2", label: "📍 Titik 2" },
+                  { id: "sensor_3", label: "📍 Titik 3" },
+                  { id: "sensor_4", label: "📍 Titik 4" },
+                ].map((s) => {
+                  const isSel = activeSensorNode === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setActiveSensorNode(s.id as any)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "10px",
+                        border: isSel ? "1px solid #10B981" : "1px solid var(--border-subtle)",
+                        background: isSel ? "rgba(16, 185, 129, 0.12)" : "var(--bg-app)",
+                        color: isSel ? "#059669" : "var(--text-secondary)",
+                        fontSize: "11.5px",
+                        fontWeight: isSel ? 700 : 500,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Kartu Parameter Sensor 7-in-1 */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "18px",
+                padding: "16px",
+                border: "1px solid var(--border-subtle)",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "14px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Sprout size={18} color="#10B981" />
+                  <h4 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
+                    Parameter Tanah ({activeSensorNode === "all" ? "Rata-rata 4 Zona" : activeSensorNode.replace("_", " ").toUpperCase()})
+                  </h4>
+                </div>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                  Nilai Realtime
+                </span>
+              </div>
+
+              {/* 3 Parameter Utama: Kelembaban, Suhu, pH */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+                {/* Kelembaban */}
+                <div style={{ background: "var(--bg-app)", borderRadius: "12px", padding: "10px", textAlign: "center" }}>
+                  <Droplets size={16} color="#3B82F6" style={{ margin: "0 auto 4px" }} />
+                  <div style={{ fontSize: "10.5px", color: "var(--text-muted)" }}>Kelembaban</div>
+                  <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text-heading)", margin: "2px 0" }}>
+                    {activeOnlineData?.Moisture !== undefined ? `${activeOnlineData.Moisture}%` : "--"}
+                  </div>
+                  <div style={{ fontSize: "9.5px", color: "#16A34A", fontWeight: 600 }}>50-80%</div>
+                </div>
+
+                {/* Suhu */}
+                <div style={{ background: "var(--bg-app)", borderRadius: "12px", padding: "10px", textAlign: "center" }}>
+                  <Thermometer size={16} color="#EF4444" style={{ margin: "0 auto 4px" }} />
+                  <div style={{ fontSize: "10.5px", color: "var(--text-muted)" }}>Suhu Tanah</div>
+                  <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text-heading)", margin: "2px 0" }}>
+                    {activeOnlineData?.Temperature !== undefined ? `${activeOnlineData.Temperature}°C` : "--"}
+                  </div>
+                  <div style={{ fontSize: "9.5px", color: "#16A34A", fontWeight: 600 }}>22-30°C</div>
+                </div>
+
+                {/* pH */}
+                <div style={{ background: "var(--bg-app)", borderRadius: "12px", padding: "10px", textAlign: "center" }}>
+                  <FlaskConical size={16} color="#8B5CF6" style={{ margin: "0 auto 4px" }} />
+                  <div style={{ fontSize: "10.5px", color: "var(--text-muted)" }}>pH Tanah</div>
+                  <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text-heading)", margin: "2px 0" }}>
+                    {activeOnlineData?.PH !== undefined ? activeOnlineData.PH : "--"}
+                  </div>
+                  <div style={{ fontSize: "9.5px", color: "#16A34A", fontWeight: 600 }}>6.0-7.5</div>
+                </div>
+              </div>
+
+              {/* Nutrisi NPK & Daya Hantar Listrik EC */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" }}>
+                <div style={{ background: "var(--bg-app)", borderRadius: "10px", padding: "8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 700 }}>Nitrogen (N)</div>
+                  <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text-heading)", margin: "2px 0" }}>
+                    {activeOnlineData?.N !== undefined ? `${activeOnlineData.N}` : "--"}
+                  </div>
+                  <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>mg/kg</div>
+                </div>
+
+                <div style={{ background: "var(--bg-app)", borderRadius: "10px", padding: "8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 700 }}>Fosfor (P)</div>
+                  <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text-heading)", margin: "2px 0" }}>
+                    {activeOnlineData?.P !== undefined ? `${activeOnlineData.P}` : "--"}
+                  </div>
+                  <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>mg/kg</div>
+                </div>
+
+                <div style={{ background: "var(--bg-app)", borderRadius: "10px", padding: "8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 700 }}>Kalium (K)</div>
+                  <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text-heading)", margin: "2px 0" }}>
+                    {activeOnlineData?.K !== undefined ? `${activeOnlineData.K}` : "--"}
+                  </div>
+                  <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>mg/kg</div>
+                </div>
+
+                <div style={{ background: "var(--bg-app)", borderRadius: "10px", padding: "8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 700 }}>EC Listrik</div>
+                  <div style={{ fontSize: "13px", fontWeight: 800, color: "var(--text-heading)", margin: "2px 0" }}>
+                    {activeOnlineData?.Conductivity !== undefined ? `${activeOnlineData.Conductivity}` : "--"}
+                  </div>
+                  <div style={{ fontSize: "9px", color: "var(--text-muted)" }}>µS/cm</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Matriks Perbandingan 4 Zona Lapangan */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "18px",
+                padding: "16px",
+                border: "1px solid var(--border-subtle)",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-heading)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Gauge size={15} color="#3B82F6" />
+                  Perbandingan 4 Zona Sensor
+                </span>
+                <span style={{ fontSize: "10px", color: "#16A34A", fontWeight: 700, background: "rgba(34, 197, 94, 0.12)", padding: "2px 6px", borderRadius: "6px" }}>
+                  Multi-Point Sync
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
+                {[
+                  { name: "Titik 1 (Utara)", data: firebaseLatest?.sensor_1 },
+                  { name: "Titik 2 (Timur)", data: firebaseLatest?.sensor_2 },
+                  { name: "Titik 3 (Selatan)", data: firebaseLatest?.sensor_3 },
+                  { name: "Titik 4 (Barat)", data: firebaseLatest?.sensor_4 },
+                ].map((z, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: "var(--bg-app)",
+                      borderRadius: "12px",
+                      padding: "10px",
+                      fontSize: "11px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: "var(--text-heading)", fontSize: "11.5px" }}>
+                      {z.name}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)" }}>
+                      <span>Lengas:</span>
+                      <strong style={{ color: "#3B82F6" }}>
+                        {z.data?.Moisture !== undefined ? `${z.data.Moisture}%` : "--"}
+                      </strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)" }}>
+                      <span>Suhu:</span>
+                      <strong>{z.data?.Temperature !== undefined ? `${z.data.Temperature}°C` : "--"}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)" }}>
+                      <span>pH:</span>
+                      <strong style={{ color: "#8B5CF6" }}>{z.data?.PH !== undefined ? z.data.PH : "--"}</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Grafik Tren Real-Time Hari Ini (Mulai Jam 00:30) */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "18px",
+                padding: "16px",
+                border: "1px solid var(--border-subtle)",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "14px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <h4 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+                    <TrendingUp size={16} color="#10B981" />
+                    Tren Real-Time Hari Ini (Mulai 00:30 WIB)
+                  </h4>
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: "2px 0 0" }}>
+                    Perekaman sensor dari pukul 00:30:37 s/d waktu sekarang
+                  </p>
+                </div>
+
+                {/* Metric Selector Tabs */}
+                <div style={{ display: "flex", gap: "4px", background: "var(--bg-hover)", padding: "3px", borderRadius: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setOnlineMetric("moisture")}
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                      border: "none",
+                      background: onlineMetric === "moisture" ? "#3B82F6" : "transparent",
+                      color: onlineMetric === "moisture" ? "#FFFFFF" : "var(--text-muted)",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Lengas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOnlineMetric("temperature")}
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                      border: "none",
+                      background: onlineMetric === "temperature" ? "#EF4444" : "transparent",
+                      color: onlineMetric === "temperature" ? "#FFFFFF" : "var(--text-muted)",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Suhu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOnlineMetric("ph")}
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                      border: "none",
+                      background: onlineMetric === "ph" ? "#8B5CF6" : "transparent",
+                      color: onlineMetric === "ph" ? "#FFFFFF" : "var(--text-muted)",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    pH
+                  </button>
+                </div>
+              </div>
+
+              {/* Chart Container */}
+              <div style={{ height: "200px", width: "100%" }}>
+                {todayHistoryRecords.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={todayHistoryRecords}>
+                      <defs>
+                        <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
+                          <stop
+                            offset="5%"
+                            stopColor={
+                              onlineMetric === "moisture"
+                                ? "#3B82F6"
+                                : onlineMetric === "temperature"
+                                ? "#EF4444"
+                                : "#8B5CF6"
+                            }
+                            stopOpacity={0.4}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor={
+                              onlineMetric === "moisture"
+                                ? "#3B82F6"
+                                : onlineMetric === "temperature"
+                                ? "#EF4444"
+                                : "#8B5CF6"
+                            }
+                            stopOpacity={0.0}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                      <XAxis
+                        dataKey="time"
+                        tick={{ fontSize: 10, fill: "var(--text-muted)" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        domain={["auto", "auto"]}
+                        tick={{ fontSize: 10, fill: "var(--text-muted)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={30}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#1E293B",
+                          border: "none",
+                          borderRadius: "10px",
+                          fontSize: "11px",
+                          color: "#FFF",
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey={
+                          onlineMetric === "moisture"
+                            ? "avgMoisture"
+                            : onlineMetric === "temperature"
+                            ? "s1_temp"
+                            : "s1_ph"
+                        }
+                        name={
+                          onlineMetric === "moisture"
+                            ? "Kelembaban (%)"
+                            : onlineMetric === "temperature"
+                            ? "Suhu (°C)"
+                            : "pH"
+                        }
+                        stroke={
+                          onlineMetric === "moisture"
+                            ? "#3B82F6"
+                            : onlineMetric === "temperature"
+                            ? "#EF4444"
+                            : "#8B5CF6"
+                        }
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#colorOnline)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "12px" }}>
+                    <RefreshCw size={16} className="spin" style={{ marginRight: "6px" }} /> Memuat data rekaman mulai 00:30...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tabel Riwayat Pembacaan Cloud (Hari Ini mulai 00:30) */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "18px",
+                padding: "16px",
+                border: "1px solid var(--border-subtle)",
+                boxShadow: "var(--glow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h4 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
+                    Log Pembacaan Cloud (Hari Ini)
+                  </h4>
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                    Data tersimpan di Firebase sejak 00:30 WIB
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    padding: "2px 8px",
+                    borderRadius: "6px",
+                    background: "rgba(16, 185, 129, 0.12)",
+                    color: "#059669",
+                  }}
+                >
+                  {todayHistoryRecords.length} Titik Data
+                </span>
+              </div>
+
+              {/* Tabel */}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11.5px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--border-subtle)", textAlign: "left", color: "var(--text-muted)" }}>
+                      <th style={{ padding: "8px 6px" }}>Waktu</th>
+                      <th style={{ padding: "8px 6px" }}>Zona 1</th>
+                      <th style={{ padding: "8px 6px" }}>Zona 2</th>
+                      <th style={{ padding: "8px 6px" }}>Zona 3</th>
+                      <th style={{ padding: "8px 6px" }}>Zona 4</th>
+                      <th style={{ padding: "8px 6px" }}>Rerata</th>
+                      <th style={{ padding: "8px 6px" }}>Katup</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todayHistoryRecords.slice(-15).reverse().map((r, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                        <td style={{ padding: "8px 6px", fontFamily: "monospace", color: "var(--text-muted)" }}>
+                          {r.time}
+                        </td>
+                        <td style={{ padding: "8px 6px", fontWeight: 600 }}>{r.s1_moisture}%</td>
+                        <td style={{ padding: "8px 6px" }}>{r.s2_moisture}%</td>
+                        <td style={{ padding: "8px 6px" }}>{r.s3_moisture}%</td>
+                        <td style={{ padding: "8px 6px" }}>{r.s4_moisture}%</td>
+                        <td style={{ padding: "8px 6px", fontWeight: 700, color: "#10B981" }}>{r.avgMoisture}%</td>
+                        <td style={{ padding: "8px 6px" }}>
+                          <span
+                            style={{
+                              fontSize: "9.5px",
+                              fontWeight: 700,
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              background: r.valveStatus === "OPEN" ? "rgba(34, 197, 94, 0.15)" : "rgba(100, 116, 139, 0.15)",
+                              color: r.valveStatus === "OPEN" ? "#16A34A" : "#64748B",
+                            }}
+                          >
+                            {r.valveStatus}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Peringatan Browser jika Web Serial API tidak didukung */}
         {!isSupported && (
           <div
             style={{
@@ -1376,6 +2277,8 @@ export function OfflineMonitoringScreen() {
             </div>
           )}
         </div>
+        </>
+      )}
 
       </div>
 
