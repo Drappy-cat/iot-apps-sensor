@@ -138,8 +138,16 @@ function publishCommand(cmd) {
 }
 
 // 4. Inisialisasi WebSocket Server Terpisah untuk ESP dan Client
-const wssEsp = new WebSocketServer({ noServer: true });
-const wssClient = new WebSocketServer({ noServer: true });
+const wssEsp = new WebSocketServer({
+  noServer: true,
+  perMessageDeflate: false,
+  maxPayload: 50 * 1024 * 1024,
+});
+const wssClient = new WebSocketServer({
+  noServer: true,
+  perMessageDeflate: false,
+  maxPayload: 50 * 1024 * 1024,
+});
 
 // Routing upgrade HTTP request ke WebSocket yang sesuai
 server.on("upgrade", (request, socket, head) => {
