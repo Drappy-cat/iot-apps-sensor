@@ -350,9 +350,32 @@ app.post("/api/camera/snapshot", (req, res) => {
     return res.status(400).json({ error: "Buffer gambar kosong" });
   }
 
+  const triggerSource = (req.headers["x-trigger-source"] || "HOURLY_TIMELAPSE").toUpperCase();
+  const clientHour = req.headers["x-capture-hour"];
+
+  // Dapatkan waktu saat ini dalam format waktu lokal Indonesia (WIB)
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  const filename = `snap_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.jpg`;
+
+  const yyyy = now.getFullYear();
+  const mm = pad(now.getMonth() + 1);
+  const dd = pad(now.getDate());
+  const hh = clientHour !== undefined ? pad(clientHour) : pad(now.getHours());
+  const min = pad(now.getMinutes());
+  const ss = pad(now.getSeconds());
+
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+  const timeStr = `${hh}:${min}:${ss} WIB`;
+  const hourNum = parseInt(hh, 10);
+  const formattedTimeWib = `${dd}-${mm}-${yyyy} Pukul ${hh}:${min}:${ss} WIB`;
+
+  // Format penamaan file yang rapi & memuat tanggal serta jam:
+  // Contoh: timelapse_tanaman_2026-11-25_pukul_00-00-00_WIB.jpg
+  // Atau jika manual: manual_tanaman_2026-11-24_pukul_22-30-15_WIB.jpg
+  const prefix = triggerSource.includes("MANUAL") || triggerSource.includes("MQTT")
+    ? "manual_tanaman"
+    : "timelapse_tanaman";
+  const filename = `${prefix}_${dateStr}_pukul_${hh}-${min}-${ss}_WIB.jpg`;
   const filePath = path.join(uploadsDir, filename);
 
   fs.writeFile(filePath, req.body, (err) => {
@@ -362,9 +385,9 @@ app.post("/api/camera/snapshot", (req, res) => {
     }
 
     const fileUrl = `/uploads/timelapse/${filename}`;
-    console.log(`[TIMELAPSE] 📸 Foto 1 Jam Tersimpan: ${filename} (${(req.body.length / 1024).toFixed(1)} KB)`);
+    console.log(`[TIMELAPSE] 📸 Foto 1 Jam Tersimpan: ${filename} (${(req.body.length / 1024).toFixed(1)} KB, Jam: ${hh}:00 WIB)`);
 
-    // Catat riwayat foto ke JSON terpisah (Database arsip terpisah dari Firebase RTDB)
+    // Catat riwayat foto lengkap dengan tanggal & jam ke JSON arsip lokal
     const indexFile = path.join(__dirname, "uploads/timelapse_index.json");
     let history = [];
     try {
@@ -374,20 +397,34 @@ app.post("/api/camera/snapshot", (req, res) => {
     } catch (e) {
       history = [];
     }
-    history.unshift({
+
+    const record = {
       filename,
       url: fileUrl,
+      date: dateStr,
+      time: timeStr,
+      hour: hourNum,
+      trigger_source: triggerSource,
       sizeBytes: req.body.length,
+      sizeKb: parseFloat((req.body.length / 1024).toFixed(1)),
       timestamp: now.toISOString(),
-      formattedTime: now.toLocaleString("id-ID"),
-    });
+      formattedTime: formattedTimeWib,
+    };
+
+    history.unshift(record);
     // Simpan maksimal 500 foto riwayat terakhir
     if (history.length > 500) history = history.slice(0, 500);
     fs.writeFileSync(indexFile, JSON.stringify(history, null, 2));
 
-    // Jika Supabase sudah dikonfigurasi, unggah juga ke Supabase Storage Cloud
+    // Jika Supabase sudah dikonfigurasi, unggah ke Supabase Cloud Storage & Database
     if (supabaseService.isConfigured()) {
-      supabaseService.uploadToSupabase(req.body, filename).then((sbRes) => {
+      supabaseService.uploadToSupabase(req.body, filename, {
+        date: dateStr,
+        time: timeStr,
+        hour: hourNum,
+        triggerSource,
+        formattedTimeWib,
+      }).then((sbRes) => {
         if (sbRes.success) {
           console.log(`[TIMELAPSE] 🚀 Tersinkronisasi ke Supabase: ${sbRes.publicUrl}`);
         }
@@ -398,8 +435,12 @@ app.post("/api/camera/snapshot", (req, res) => {
       success: true,
       filename,
       url: fileUrl,
+      date: dateStr,
+      time: timeStr,
+      hour: hourNum,
       sizeBytes: req.body.length,
       timestamp: now.toISOString(),
+      formattedTime: formattedTimeWib,
       supabaseActive: supabaseService.isConfigured(),
     });
   });

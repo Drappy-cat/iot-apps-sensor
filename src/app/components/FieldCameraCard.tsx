@@ -121,6 +121,9 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
       sizeBytes?: number;
       timestamp?: string;
       formattedTime?: string;
+      date?: string;
+      time?: string;
+      hour?: number;
     }>
   >([]);
   const [timelapseSource, setTimelapseSource] = useState<string>("local");
@@ -2382,7 +2385,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                         gap: "4px",
                       }}
                     >
-                      <Clock size={10} color="#38BDF8" />
+                      <Clock size={10} color="#38BDF8" style={{ flexShrink: 0 }} />
                       <span
                         style={{
                           fontSize: "9.5px",
@@ -2393,7 +2396,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {photo.formattedTime ? photo.formattedTime.split(" ")[1] || photo.formattedTime : "Snap"}
+                        {photo.time || (photo.formattedTime ? photo.formattedTime.split(" ")[1] || photo.formattedTime : "WIB")}
                       </span>
                     </div>
                   </div>
