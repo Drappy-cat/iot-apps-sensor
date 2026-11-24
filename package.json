@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "relay": "node backend/server.js",
     "build": "vite build"
   },
   "dependencies": {

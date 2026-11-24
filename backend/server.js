@@ -15,11 +15,13 @@
 const http = require("http");
 const url = require("url");
 const path = require("path");
+const fs = require("fs");
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const mqtt = require("mqtt");
 const { WebSocketServer, WebSocket } = require("ws");
+const supabaseService = require("./services/supabaseService");
 
 // 1. Muat variabel lingkungan
 dotenv.config();
@@ -35,6 +37,15 @@ const TOPIC_STATUS = process.env.MQTT_TOPIC_STATUS || "tanaman/cam/status";
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Middleware raw binary untuk menerima foto snapshot langsung dari ESP32
+app.use(express.raw({ type: ["image/jpeg", "application/octet-stream"], limit: "15mb" }));
+
+// Folder penyimpanan foto timelapse terpisah (tidak mencampuri database Firebase)
+const uploadsDir = path.join(__dirname, "uploads/timelapse");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Sajikan web client statis dari folder /frontend jika dibuka langsung di port server
 const frontendPath = path.join(__dirname, "../frontend");
@@ -312,8 +323,8 @@ app.get("/api/status", (req, res) => {
 // Endpoint untuk trigger manual dari REST (Opsional untuk pengujian)
 app.post("/api/cmd", (req, res) => {
   const action = (req.body?.action || "").toUpperCase();
-  if (action !== "START" && action !== "STOP") {
-    return res.status(400).json({ error: "Action harus 'START' atau 'STOP'" });
+  if (action !== "START" && action !== "STOP" && action !== "CAPTURE") {
+    return res.status(400).json({ error: "Action harus 'START', 'STOP', atau 'CAPTURE'" });
   }
 
   publishCommand(action);
@@ -322,6 +333,86 @@ app.post("/api/cmd", (req, res) => {
     actionSent: action,
     topic: TOPIC_CMD,
   });
+});
+
+// Endpoint untuk menerima foto Snapshot/Timelapse berkala (per 1 jam) dari ESP32-CAM
+app.post("/api/camera/snapshot", (req, res) => {
+  if (!req.body || req.body.length === 0) {
+    return res.status(400).json({ error: "Buffer gambar kosong" });
+  }
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const filename = `snap_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.jpg`;
+  const filePath = path.join(uploadsDir, filename);
+
+  fs.writeFile(filePath, req.body, (err) => {
+    if (err) {
+      console.error("[TIMELAPSE] ❌ Gagal menyimpan foto:", err.message);
+      return res.status(500).json({ error: "Gagal menyimpan foto ke disk" });
+    }
+
+    const fileUrl = `/uploads/timelapse/${filename}`;
+    console.log(`[TIMELAPSE] 📸 Foto 1 Jam Tersimpan: ${filename} (${(req.body.length / 1024).toFixed(1)} KB)`);
+
+    // Catat riwayat foto ke JSON terpisah (Database arsip terpisah dari Firebase RTDB)
+    const indexFile = path.join(__dirname, "uploads/timelapse_index.json");
+    let history = [];
+    try {
+      if (fs.existsSync(indexFile)) {
+        history = JSON.parse(fs.readFileSync(indexFile, "utf-8"));
+      }
+    } catch (e) {
+      history = [];
+    }
+    history.unshift({
+      filename,
+      url: fileUrl,
+      sizeBytes: req.body.length,
+      timestamp: now.toISOString(),
+      formattedTime: now.toLocaleString("id-ID"),
+    });
+    // Simpan maksimal 500 foto riwayat terakhir
+    if (history.length > 500) history = history.slice(0, 500);
+    fs.writeFileSync(indexFile, JSON.stringify(history, null, 2));
+
+    // Jika Supabase sudah dikonfigurasi, unggah juga ke Supabase Storage Cloud
+    if (supabaseService.isConfigured()) {
+      supabaseService.uploadToSupabase(req.body, filename).then((sbRes) => {
+        if (sbRes.success) {
+          console.log(`[TIMELAPSE] 🚀 Tersinkronisasi ke Supabase: ${sbRes.publicUrl}`);
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      filename,
+      url: fileUrl,
+      sizeBytes: req.body.length,
+      timestamp: now.toISOString(),
+      supabaseActive: supabaseService.isConfigured(),
+    });
+  });
+});
+
+// Endpoint untuk melihat riwayat galeri foto timelapse tanaman (dari Supabase atau Lokal)
+app.get("/api/camera/timelapse", async (req, res) => {
+  if (supabaseService.isConfigured()) {
+    const sbData = await supabaseService.getSupabaseTimelapsePhotos();
+    if (sbData.count > 0) {
+      return res.json({ source: "supabase", ...sbData });
+    }
+  }
+
+  const indexFile = path.join(__dirname, "uploads/timelapse_index.json");
+  try {
+    if (fs.existsSync(indexFile)) {
+      const data = JSON.parse(fs.readFileSync(indexFile, "utf-8"));
+      return res.json({ source: "local", count: data.length, photos: data });
+    }
+  } catch (e) {}
+  res.json({ source: "empty", count: 0, photos: [] });
 });
 
 // 6. Mulai Server HTTP & WebSocket
