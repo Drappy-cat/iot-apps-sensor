@@ -1143,7 +1143,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                   Menerima stream dari ESP32-CAM...
                 </span>
                 <span style={{ fontSize: "11px", color: "#64748B" }}>
-                  ESP32 sedang mengirim frame video VGA
+                  ESP32 sedang mengirim frame video real-time (QVGA Smooth 18 FPS)
                 </span>
               </div>
             )}
