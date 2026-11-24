@@ -27,6 +27,9 @@ import {
   Wifi,
   WifiOff,
   Settings,
+  Cloud,
+  Clock,
+  Image as ImageIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { NPKSensorData } from "../types/sensor";
@@ -89,6 +92,25 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   } | null>(null);
   const [espFps, setEspFps] = useState<number>(0);
 
+  // Supabase / Local Timelapse Gallery state
+  const [timelapsePhotos, setTimelapsePhotos] = useState<
+    Array<{
+      filename: string;
+      url: string;
+      sizeBytes?: number;
+      timestamp?: string;
+      formattedTime?: string;
+    }>
+  >([]);
+  const [timelapseSource, setTimelapseSource] = useState<string>("local");
+  const [isCapturingManual, setIsCapturingManual] = useState<boolean>(false);
+  const [previewTimelapse, setPreviewTimelapse] = useState<{
+    url: string;
+    title: string;
+    timestamp?: string;
+    size?: string;
+  } | null>(null);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const espImgRef = useRef<HTMLImageElement | null>(null);
@@ -122,12 +144,53 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3500);
+    fetchTimelapsePhotos();
+    const interval = setInterval(() => {
+      fetchStatus();
+    }, 3500);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, [cameraSource, espRelayHost]);
+
+  // Fetch riwayat foto timelapse dari server / Supabase
+  const fetchTimelapsePhotos = async () => {
+    try {
+      const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+      const res = await fetch(`${protocol}//${espRelayHost}/api/camera/timelapse`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTimelapsePhotos(data.photos || []);
+        setTimelapseSource(data.source || "local");
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Memicu ESP32-CAM memotret manual lewat perintah MQTT
+  const handleTriggerManualCapture = async () => {
+    setIsCapturingManual(true);
+    try {
+      const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+      const res = await fetch(`${protocol}//${espRelayHost}/api/cmd`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "CAPTURE" }),
+      });
+      if (res.ok) {
+        setTimeout(fetchTimelapsePhotos, 3500);
+      }
+    } catch (err) {
+      console.warn("Gagal trigger manual capture:", err);
+    } finally {
+      setTimeout(() => setIsCapturingManual(false), 2000);
+    }
+  };
 
   // Save captured photos to localStorage
   useEffect(() => {
@@ -1079,28 +1142,56 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
               )}
             </motion.button>
 
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                flex: 1,
-                background: "var(--bg-hover)",
-                color: "var(--text-primary)",
-                border: "1px solid var(--border-card)",
-                borderRadius: "14px",
-                padding: "12px 14px",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-              }}
-            >
-              <Upload size={16} />
-              Unggah Foto
-            </motion.button>
+            {cameraSource === "esp32" ? (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={handleTriggerManualCapture}
+                disabled={isCapturingManual}
+                title="Perintahkan ESP32 untuk memotret sekarang dan simpan ke Cloud Supabase"
+                style={{
+                  flex: 1,
+                  background: isCapturingManual ? "#059669" : "#10B981",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: isCapturingManual ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  boxShadow: "0 4px 12px rgba(16, 185, 129, 0.25)",
+                }}
+              >
+                <Cloud size={16} />
+                {isCapturingManual ? "Memotret..." : "Potret Cloud (ESP32)"}
+              </motion.button>
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  flex: 1,
+                  background: "var(--bg-hover)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-card)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                }}
+              >
+                <Upload size={16} />
+                Unggah Foto
+              </motion.button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -1425,6 +1516,140 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
         )}
       </AnimatePresence>
 
+      {/* ☁️ Galeri Timelapse Tanaman (Supabase Cloud / Jam-jaman) */}
+      {cameraSource === "esp32" && (
+        <div style={{ borderTop: "1px solid var(--border-card)", paddingTop: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Cloud size={16} color="#0EA5E9" />
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>
+                Arsip Timelapse Tanaman ({timelapsePhotos.length})
+              </span>
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  padding: "1px 6px",
+                  borderRadius: "6px",
+                  background: timelapseSource === "supabase" ? "rgba(16, 185, 129, 0.15)" : "var(--bg-hover)",
+                  color: timelapseSource === "supabase" ? "#10B981" : "var(--text-muted)",
+                }}
+              >
+                {timelapseSource === "supabase" ? "☁️ Supabase Cloud" : "📁 Server Lokal"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={fetchTimelapsePhotos}
+              title="Perbarui daftar foto"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                padding: "2px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "11px",
+              }}
+            >
+              <RefreshCw size={12} />
+              <span>Refresh</span>
+            </button>
+          </div>
+
+          {timelapsePhotos.length === 0 ? (
+            <div
+              style={{
+                background: "var(--bg-app)",
+                borderRadius: "12px",
+                padding: "12px",
+                textAlign: "center",
+                color: "var(--text-muted)",
+                fontSize: "11.5px",
+                border: "1px dashed var(--border-card)",
+              }}
+            >
+              Belum ada foto timelapse tanaman. Kamera akan memotret otomatis setiap 1 jam, atau tekan tombol <strong>"Potret Cloud (ESP32)"</strong> di atas untuk memicu pemotretan sekarang.
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                overflowX: "auto",
+                paddingBottom: "8px",
+              }}
+            >
+              {timelapsePhotos.map((photo, idx) => {
+                const imgUrl = photo.url.startsWith("http")
+                  ? photo.url
+                  : `http://${espRelayHost}${photo.url}`;
+                return (
+                  <div
+                    key={idx}
+                    onClick={() =>
+                      setPreviewTimelapse({
+                        url: imgUrl,
+                        title: photo.filename,
+                        timestamp: photo.formattedTime,
+                        size: photo.sizeBytes ? `${(photo.sizeBytes / 1024).toFixed(1)} KB` : undefined,
+                      })
+                    }
+                    style={{
+                      position: "relative",
+                      width: "115px",
+                      height: "92px",
+                      borderRadius: "14px",
+                      overflow: "hidden",
+                      flexShrink: 0,
+                      cursor: "pointer",
+                      border: "1.5px solid rgba(14, 165, 233, 0.3)",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                      background: "#0B1120",
+                    }}
+                  >
+                    <img
+                      src={imgUrl}
+                      alt={photo.filename}
+                      loading="lazy"
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        insetInline: 0,
+                        background: "rgba(15,23,42,0.85)",
+                        padding: "3px 6px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <Clock size={10} color="#38BDF8" />
+                      <span
+                        style={{
+                          fontSize: "9.5px",
+                          fontWeight: 700,
+                          color: "white",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {photo.formattedTime ? photo.formattedTime.split(" ")[1] || photo.formattedTime : "Snap"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Captured Photos Gallery with Diagnosis Badges */}
       {capturedPhotos.length > 0 && (
         <div style={{ borderTop: "1px solid var(--border-card)", paddingTop: "14px" }}>
@@ -1673,6 +1898,126 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                   <Trash2 size={15} />
                   Hapus
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Preview Foto Timelapse Supabase / Cloud */}
+      <AnimatePresence>
+        {previewTimelapse && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setPreviewTimelapse(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.85)",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "var(--bg-card)",
+                borderRadius: "20px",
+                overflow: "hidden",
+                width: "100%",
+                maxWidth: "460px",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                border: "1px solid var(--border-card)",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "14px 18px",
+                  borderBottom: "1px solid var(--border-card)",
+                }}
+              >
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "var(--text-primary)" }}>
+                    Foto Timelapse Tanaman
+                  </h4>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: "var(--text-muted)" }}>
+                    {previewTimelapse.timestamp} {previewTimelapse.size ? `• ${previewTimelapse.size}` : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPreviewTimelapse(null)}
+                  style={{
+                    background: "var(--bg-hover)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "32px",
+                    height: "32px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div style={{ position: "relative", width: "100%", maxHeight: "380px", background: "#0B1120" }}>
+                <img
+                  src={previewTimelapse.url}
+                  alt={previewTimelapse.title}
+                  style={{ width: "100%", maxHeight: "380px", objectFit: "contain", display: "block" }}
+                />
+              </div>
+
+              <div
+                style={{
+                  padding: "14px 18px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                  {previewTimelapse.title}
+                </span>
+                <a
+                  href={previewTimelapse.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  download={previewTimelapse.title}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    background: "#0EA5E9",
+                    color: "white",
+                    borderRadius: "12px",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  <Download size={15} />
+                  Buka / Unduh
+                </a>
               </div>
             </motion.div>
           </motion.div>
