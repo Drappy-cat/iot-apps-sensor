@@ -1167,10 +1167,16 @@ export function SettingsScreen() {
           >
             {[
               {
-                name: "Rizma Indra Pramuda",
+                name: "Rizma Indra Pramudya",
                 id: "25051204370",
                 role: "Fullstack Developer",
                 pic: RizmaPic,
+              },
+              {
+                name: "Izora Elverda Narulita Putri",
+                id: "25051204287",
+                role: "UI/UX & System Analyst",
+                pic: null,
               },
               {
                 name: "Putera Al Khalidi",
@@ -1179,9 +1185,9 @@ export function SettingsScreen() {
                 pic: PuteraPic,
               },
               {
-                name: "Leony Andika Triwicaksono",
-                id: "25051204324",
-                role: "Penulis",
+                name: "Muhammad Abdullah Ro'in",
+                id: "25051204270",
+                role: "IoT & Hardware Engineer",
                 pic: null,
               },
             ].map((dev, idx) => (

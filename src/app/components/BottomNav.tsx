@@ -7,7 +7,7 @@ import { useViewport } from "../context/ViewportContext";
 const navItems = [
   { icon: Home, label: "Beranda", path: "/dashboard" },
   { icon: BarChart2, label: "Riwayat", path: "/analytics" },
-  { icon: Cpu, label: "Offline", path: "/offline" },
+  { icon: Cpu, label: "Pantauan", path: "/offline" },
   { icon: Clock, label: "Jadwal", path: "/schedule" },
   { icon: Settings, label: "Pengaturan", path: "/settings" },
 ];

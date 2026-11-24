@@ -4,13 +4,15 @@ import { NPKSensorData, FirebaseConfigState } from "../types/sensor";
 
 export const DEFAULT_FIREBASE_CONFIG: FirebaseConfigState = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "agriculture-esp32-2f547.firebaseapp.com",
+  databaseURL:
+    import.meta.env.VITE_FIREBASE_DATABASE_URL ||
+    "https://agriculture-esp32-2f547-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "agriculture-esp32-2f547",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "agriculture-esp32-2f547.appspot.com",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
-  sensorPath: import.meta.env.VITE_FIREBASE_SENSOR_PATH || "sensor_npk",
+  sensorPath: import.meta.env.VITE_FIREBASE_SENSOR_PATH || "test_kalibrasi/latest",
 };
 
 export const STORAGE_KEY_FIREBASE = "iot_firebase_config";
@@ -120,9 +122,54 @@ export function listenToNPKSensor(
   // Connect to Firebase Realtime Database
   onStatusChange("connecting");
   const db = initFirebase(config);
+
+  // If no Firebase SDK database instance (e.g. no apiKey provided), use direct REST polling from databaseURL
   if (!db) {
-    onStatusChange("error");
-    return () => {};
+    const cleanUrl = config.databaseURL.replace(/\/$/, "");
+    const fetchPath = config.sensorPath ? config.sensorPath.replace(/^\//, "") : "test_kalibrasi/latest";
+    let isCancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${cleanUrl}/${fetchPath}.json`, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const val = await res.json();
+        if (val && !isCancelled) {
+          const parsed: NPKSensorData = {
+            moisture: Number(
+              val.AvgMoisture ??
+                val.sensor_1?.Moisture ??
+                val.moisture ??
+                val.kelembaban ??
+                INITIAL_SENSOR_DATA.moisture
+            ),
+            temperature: Number(
+              val.sensor_1?.Temperature ??
+                val.temperature ??
+                val.suhu ??
+                INITIAL_SENSOR_DATA.temperature
+            ),
+            ph: Number(val.sensor_1?.PH ?? val.ph ?? INITIAL_SENSOR_DATA.ph),
+            ec: Number(val.sensor_1?.Conductivity ?? val.ec ?? INITIAL_SENSOR_DATA.ec),
+            nitrogen: Number(val.sensor_1?.N ?? val.nitrogen ?? val.n ?? INITIAL_SENSOR_DATA.nitrogen),
+            phosphorus: Number(val.sensor_1?.P ?? val.phosphorus ?? val.p ?? INITIAL_SENSOR_DATA.phosphorus),
+            potassium: Number(val.sensor_1?.K ?? val.potassium ?? val.k ?? INITIAL_SENSOR_DATA.potassium),
+            timestamp: Date.now(),
+          };
+          onData(parsed);
+          onStatusChange("live");
+        }
+      } catch (err) {
+        if (!isCancelled) onStatusChange("error");
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
   }
 
   const path = config.sensorPath || "sensor_npk";
@@ -134,13 +181,24 @@ export function listenToNPKSensor(
       if (snapshot.exists()) {
         const val = snapshot.val();
         const parsed: NPKSensorData = {
-          moisture: Number(val.moisture ?? val.kelembaban ?? INITIAL_SENSOR_DATA.moisture),
-          temperature: Number(val.temperature ?? val.suhu ?? INITIAL_SENSOR_DATA.temperature),
-          ph: Number(val.ph ?? INITIAL_SENSOR_DATA.ph),
-          ec: Number(val.ec ?? INITIAL_SENSOR_DATA.ec),
-          nitrogen: Number(val.nitrogen ?? val.n ?? INITIAL_SENSOR_DATA.nitrogen),
-          phosphorus: Number(val.phosphorus ?? val.p ?? INITIAL_SENSOR_DATA.phosphorus),
-          potassium: Number(val.potassium ?? val.k ?? INITIAL_SENSOR_DATA.potassium),
+          moisture: Number(
+            val.AvgMoisture ??
+              val.sensor_1?.Moisture ??
+              val.moisture ??
+              val.kelembaban ??
+              INITIAL_SENSOR_DATA.moisture
+          ),
+          temperature: Number(
+            val.sensor_1?.Temperature ??
+              val.temperature ??
+              val.suhu ??
+              INITIAL_SENSOR_DATA.temperature
+          ),
+          ph: Number(val.sensor_1?.PH ?? val.ph ?? INITIAL_SENSOR_DATA.ph),
+          ec: Number(val.sensor_1?.Conductivity ?? val.ec ?? INITIAL_SENSOR_DATA.ec),
+          nitrogen: Number(val.sensor_1?.N ?? val.nitrogen ?? val.n ?? INITIAL_SENSOR_DATA.nitrogen),
+          phosphorus: Number(val.sensor_1?.P ?? val.phosphorus ?? val.p ?? INITIAL_SENSOR_DATA.phosphorus),
+          potassium: Number(val.sensor_1?.K ?? val.potassium ?? val.k ?? INITIAL_SENSOR_DATA.potassium),
           timestamp: Number(val.timestamp ?? Date.now()),
         };
         onData(parsed);

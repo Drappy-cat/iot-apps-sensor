@@ -22,6 +22,12 @@ import {
   Sliders,
   Trash2,
   Cpu,
+  Cloud,
+  Globe,
+  Gauge,
+  Zap,
+  TrendingUp,
+  ShieldCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {

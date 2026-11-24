@@ -22,6 +22,11 @@ import {
   ChevronUp,
   Upload,
   Info,
+  Smartphone,
+  Radio,
+  Wifi,
+  WifiOff,
+  Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { NPKSensorData } from "../types/sensor";
@@ -63,16 +68,73 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   const [previewPhoto, setPreviewPhoto] = useState<CapturedPhoto | null>(null);
   const [flashEffect, setFlashEffect] = useState<boolean>(false);
 
+  // Camera source selection: device (phone/laptop webcam) or esp32 (IoT MQTT+WS relay)
+  const [cameraSource, setCameraSource] = useState<"device" | "esp32">(() => {
+    return (localStorage.getItem("iot_camera_source") as "device" | "esp32") || "device";
+  });
+  const [espRelayHost, setEspRelayHost] = useState<string>(() => {
+    const saved = localStorage.getItem("iot_esp_relay_host");
+    if (saved) return saved;
+    if (typeof window !== "undefined" && window.location.hostname) {
+      return `${window.location.hostname}:5000`;
+    }
+    return "localhost:5000";
+  });
+  const [showRelaySettings, setShowRelaySettings] = useState<boolean>(false);
+  const [customHostInput, setCustomHostInput] = useState<string>(espRelayHost);
+  const [espStatus, setEspStatus] = useState<{
+    espOnline: boolean;
+    isStreaming: boolean;
+    activeViewers: number;
+  } | null>(null);
+  const [espFps, setEspFps] = useState<number>(0);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const espImgRef = useRef<HTMLImageElement | null>(null);
+  const espWsRef = useRef<WebSocket | null>(null);
+  const espBlobUrlRef = useRef<string | null>(null);
+  const fpsCountRef = useRef<number>(0);
+  const fpsTimerRef = useRef<number>(Date.now());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Poll ESP32 relay status when in esp32 mode
+  useEffect(() => {
+    if (cameraSource !== "esp32") return;
+
+    let isMounted = true;
+    const fetchStatus = async () => {
+      try {
+        const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+        const res = await fetch(`${protocol}//${espRelayHost}/api/status`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(2500),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) setEspStatus(data);
+        } else {
+          if (isMounted) setEspStatus(null);
+        }
+      } catch {
+        if (isMounted) setEspStatus(null);
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 3500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [cameraSource, espRelayHost]);
 
   // Save captured photos to localStorage
   useEffect(() => {
     localStorage.setItem("iot_captured_photos", JSON.stringify(capturedPhotos));
   }, [capturedPhotos]);
 
-  // Handle starting the camera
+  // Handle starting device webcam/phone camera
   const startCamera = async (mode: "environment" | "user" = facingMode) => {
     setErrorMsg(null);
     stopCamera();
@@ -112,7 +174,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     }
   };
 
-  // Stop camera stream
+  // Stop device webcam stream
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -124,11 +186,118 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     setIsCameraActive(false);
   };
 
-  // Switch between front & back camera
+  // Start ESP32-CAM via WebSocket relay
+  const startEspCamera = () => {
+    setErrorMsg(null);
+    stopEspCamera();
+
+    try {
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${wsProtocol}//${espRelayHost}/ws/client`;
+      const ws = new WebSocket(wsUrl);
+      espWsRef.current = ws;
+      ws.binaryType = "blob";
+
+      ws.onopen = () => {
+        console.log("WebSocket client terhubung ke relay:", wsUrl);
+        ws.send(JSON.stringify({ action: "START" }));
+        setIsCameraActive(true);
+      };
+
+      ws.onmessage = (event) => {
+        if (event.data instanceof Blob) {
+          if (espBlobUrlRef.current) {
+            URL.revokeObjectURL(espBlobUrlRef.current);
+          }
+          const blobUrl = URL.createObjectURL(event.data);
+          espBlobUrlRef.current = blobUrl;
+          if (espImgRef.current) {
+            espImgRef.current.src = blobUrl;
+          }
+
+          fpsCountRef.current++;
+          const now = Date.now();
+          if (now - fpsTimerRef.current >= 1000) {
+            setEspFps(fpsCountRef.current);
+            fpsCountRef.current = 0;
+            fpsTimerRef.current = now;
+          }
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.warn("WebSocket Relay Error:", err);
+        setErrorMsg(`Gagal terhubung ke Relay WebSocket (${espRelayHost}). Pastikan backend Node.js berjalan di port 5000.`);
+        setIsCameraActive(false);
+      };
+
+      ws.onclose = () => {
+        setIsCameraActive(false);
+        setEspFps(0);
+      };
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal menghubungkan ke ESP32 Relay");
+      setIsCameraActive(false);
+    }
+  };
+
+  // Stop ESP32 WebSocket relay stream
+  const stopEspCamera = () => {
+    if (espWsRef.current) {
+      try {
+        if (espWsRef.current.readyState === WebSocket.OPEN) {
+          espWsRef.current.send(JSON.stringify({ action: "STOP" }));
+        }
+        espWsRef.current.close();
+      } catch (e) {
+        console.warn("Error closing espWs:", e);
+      }
+      espWsRef.current = null;
+    }
+    if (espBlobUrlRef.current) {
+      URL.revokeObjectURL(espBlobUrlRef.current);
+      espBlobUrlRef.current = null;
+    }
+    if (espImgRef.current) {
+      espImgRef.current.src = "";
+    }
+    setEspFps(0);
+    setIsCameraActive(false);
+  };
+
+  // Handle switching camera source
+  const handleSwitchSource = (source: "device" | "esp32") => {
+    if (source === cameraSource) return;
+    setErrorMsg(null);
+    if (isCameraActive) {
+      if (cameraSource === "device") stopCamera();
+      else stopEspCamera();
+    }
+    setCameraSource(source);
+    localStorage.setItem("iot_camera_source", source);
+  };
+
+  const handleStartActiveCamera = () => {
+    if (cameraSource === "device") {
+      startCamera();
+    } else {
+      startEspCamera();
+    }
+  };
+
+  const handleStopActiveCamera = () => {
+    if (cameraSource === "device") {
+      stopCamera();
+    } else {
+      stopEspCamera();
+    }
+  };
+
+  // Switch between front & back camera (for device only)
   const toggleFacingMode = () => {
     const nextMode = facingMode === "environment" ? "user" : "environment";
     setFacingMode(nextMode);
-    if (isCameraActive) {
+    if (isCameraActive && cameraSource === "device") {
       startCamera(nextMode);
     }
   };
@@ -185,47 +354,60 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     setCapturedPhotos((prev) => [newPhoto, ...prev.slice(0, 9)]);
   };
 
-  // Capture snapshot from video feed
+  // Capture snapshot from video/image feed (Device or ESP32)
   const takeSnapshotAndScan = () => {
-    if (!videoRef.current || !isCameraActive) return;
+    if (!isCameraActive) return;
 
     setFlashEffect(true);
     setTimeout(() => setFlashEffect(false), 200);
 
-    const video = videoRef.current;
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    if (ctx) {
+    if (cameraSource === "device") {
+      const video = videoRef.current;
+      if (!video) return;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Watermark with sensor readings and timestamp
-      const nowStr = new Intl.DateTimeFormat("id-ID", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date());
-
-      const bannerHeight = 44;
-      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
-      ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
-
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = "bold 15px sans-serif";
-      ctx.fillText(`💧 Kelembaban: ${sensorData.moisture.toFixed(1)}% | 🧪 pH: ${sensorData.ph.toFixed(1)}`, 14, canvas.height - 18);
-
-      ctx.font = "12px sans-serif";
-      ctx.fillStyle = "#CBD5E1";
-      const timeWidth = ctx.measureText(nowStr).width;
-      ctx.fillText(nowStr, canvas.width - timeWidth - 14, canvas.height - 18);
-
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-      runAIVisionScan(undefined, dataUrl);
+    } else {
+      const img = espImgRef.current;
+      if (!img || !img.src) return;
+      canvas.width = img.naturalWidth || 640;
+      canvas.height = img.naturalHeight || 480;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     }
+
+    // Watermark with sensor readings, timestamp, and source
+    const nowStr = new Intl.DateTimeFormat("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date());
+
+    const bannerHeight = 44;
+    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+    ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "bold 14px sans-serif";
+    const srcTag = cameraSource === "esp32" ? "ESP32-CAM" : "Kamera HP";
+    ctx.fillText(
+      `💧 Kelembaban: ${sensorData.moisture.toFixed(1)}% | 🧪 pH: ${sensorData.ph.toFixed(1)} [${srcTag}]`,
+      14,
+      canvas.height - 18
+    );
+
+    ctx.font = "12px sans-serif";
+    ctx.fillStyle = "#CBD5E1";
+    const timeWidth = ctx.measureText(nowStr).width;
+    ctx.fillText(nowStr, canvas.width - timeWidth - 14, canvas.height - 18);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    runAIVisionScan(undefined, dataUrl);
   };
 
   // Handle upload leaf image from device
@@ -243,10 +425,11 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     }
   };
 
-  // Cleanup camera stream on unmount
+  // Cleanup camera streams on unmount
   useEffect(() => {
     return () => {
       stopCamera();
+      stopEspCamera();
     };
   }, []);
 
@@ -339,6 +522,212 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
         </span>
       </div>
 
+      {/* Camera Source Selector Tabs */}
+      <div
+        style={{
+          display: "flex",
+          background: "var(--bg-app)",
+          borderRadius: "14px",
+          padding: "4px",
+          gap: "6px",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => handleSwitchSource("device")}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "7px",
+            padding: "8px 12px",
+            borderRadius: "10px",
+            border: "none",
+            fontSize: "12.5px",
+            fontWeight: cameraSource === "device" ? 700 : 500,
+            background: cameraSource === "device" ? "var(--bg-card)" : "transparent",
+            color: cameraSource === "device" ? "#3B82F6" : "var(--text-muted)",
+            boxShadow: cameraSource === "device" ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <Smartphone size={15} />
+          <span>Kamera HP / Webcam</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSwitchSource("esp32")}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "7px",
+            padding: "8px 12px",
+            borderRadius: "10px",
+            border: "none",
+            fontSize: "12.5px",
+            fontWeight: cameraSource === "esp32" ? 700 : 500,
+            background: cameraSource === "esp32" ? "var(--bg-card)" : "transparent",
+            color: cameraSource === "esp32" ? "#0EA5E9" : "var(--text-muted)",
+            boxShadow: cameraSource === "esp32" ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <Radio size={15} />
+          <span>ESP32-CAM (IoT)</span>
+          {espStatus?.espOnline && (
+            <span
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                background: "#22C55E",
+                boxShadow: "0 0 6px #22C55E",
+              }}
+            />
+          )}
+        </button>
+      </div>
+
+      {/* ESP32 Status & Relay Host Settings Bar */}
+      {cameraSource === "esp32" && (
+        <div
+          style={{
+            background: "rgba(14, 165, 233, 0.07)",
+            border: "1px solid rgba(14, 165, 233, 0.22)",
+            borderRadius: "14px",
+            padding: "10px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            fontSize: "12px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "3px 8px",
+                  borderRadius: "8px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  background:
+                    espStatus === null
+                      ? "rgba(239, 68, 68, 0.15)"
+                      : espStatus.espOnline
+                      ? "rgba(34, 197, 94, 0.15)"
+                      : "rgba(234, 179, 8, 0.15)",
+                  color:
+                    espStatus === null
+                      ? "#EF4444"
+                      : espStatus.espOnline
+                      ? "#16A34A"
+                      : "#CA8A04",
+                }}
+              >
+                {espStatus === null ? (
+                  <>
+                    <WifiOff size={12} /> Relay Offline
+                  </>
+                ) : espStatus.espOnline ? (
+                  <>
+                    <Wifi size={12} /> ESP32 Online
+                  </>
+                ) : (
+                  <>
+                    <Radio size={12} /> ESP32 Siaga
+                  </>
+                )}
+              </span>
+
+              <span style={{ color: "var(--text-muted)", fontSize: "11px" }}>
+                {isCameraActive
+                  ? `${espFps} FPS • ${espStatus?.activeViewers ?? 1} viewer`
+                  : `Host: ${espRelayHost}`}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRelaySettings(!showRelaySettings)}
+              title="Atur Host Relay Backend"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                padding: "4px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "11px",
+              }}
+            >
+              <Settings size={13} />
+              <span>Host</span>
+            </button>
+          </div>
+
+          {/* Config Input collapsible */}
+          {showRelaySettings && (
+            <div
+              style={{
+                display: "flex",
+                gap: "6px",
+                paddingTop: "6px",
+                borderTop: "1px dashed rgba(14, 165, 233, 0.2)",
+              }}
+            >
+              <input
+                type="text"
+                value={customHostInput}
+                onChange={(e) => setCustomHostInput(e.target.value)}
+                placeholder="misal: localhost:5000 atau 192.168.1.50:5000"
+                style={{
+                  flex: 1,
+                  background: "var(--bg-card)",
+                  color: "var(--text-primary)",
+                  border: "1px solid var(--border-card)",
+                  borderRadius: "8px",
+                  padding: "5px 8px",
+                  fontSize: "11px",
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const cleaned = customHostInput.trim() || "localhost:5000";
+                  setEspRelayHost(cleaned);
+                  localStorage.setItem("iot_esp_relay_host", cleaned);
+                  setShowRelaySettings(false);
+                }}
+                style={{
+                  background: "#0EA5E9",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "5px 10px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Simpan
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Target Simulation Filter / Quick Mode */}
       <div
         style={{
@@ -416,19 +805,35 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
           />
         )}
 
-        {/* Video Stream */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: isCameraActive ? "block" : "none",
-          }}
-        />
+        {/* Video Stream for Device/Webcam */}
+        {cameraSource === "device" && (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: isCameraActive ? "block" : "none",
+            }}
+          />
+        )}
+
+        {/* Image Stream for ESP32-CAM (Binary JPEG over WebSocket) */}
+        {cameraSource === "esp32" && (
+          <img
+            ref={espImgRef}
+            alt="ESP32-CAM Live Feed"
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: isCameraActive ? "block" : "none",
+            }}
+          />
+        )}
 
         {/* Real-Time AI Scanner Crosshair & Bounding Box */}
         {isCameraActive && (
@@ -522,9 +927,10 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
           </div>
         )}
 
-        {/* Switch camera button when active */}
-        {isCameraActive && (
+        {/* Top-Right Control: Front/Back camera toggle for Device, or Live FPS pill for ESP32 */}
+        {isCameraActive && cameraSource === "device" && (
           <button
+            type="button"
             onClick={toggleFacingMode}
             title="Ganti Kamera Depan/Belakang"
             style={{
@@ -548,6 +954,38 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
           </button>
         )}
 
+        {isCameraActive && cameraSource === "esp32" && (
+          <div
+            style={{
+              position: "absolute",
+              top: "12px",
+              right: "12px",
+              background: "rgba(15, 23, 42, 0.8)",
+              border: "1px solid rgba(14, 165, 233, 0.3)",
+              backdropFilter: "blur(6px)",
+              borderRadius: "10px",
+              padding: "4px 9px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              zIndex: 20,
+            }}
+          >
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                background: "#0EA5E9",
+                boxShadow: "0 0 6px #0EA5E9",
+              }}
+            />
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "white" }}>
+              ESP32 • {espFps} FPS
+            </span>
+          </div>
+        )}
+
         {/* Inactive State / Placeholder */}
         {!isCameraActive && (
           <div style={{ textAlign: "center", padding: "16px", color: "#94A3B8" }}>
@@ -563,19 +1001,25 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                 margin: "0 auto 8px",
               }}
             >
-              <Camera size={24} color="#CBD5E1" strokeWidth={1.8} />
+              {cameraSource === "esp32" ? (
+                <Radio size={24} color="#38BDF8" strokeWidth={1.8} />
+              ) : (
+                <Camera size={24} color="#CBD5E1" strokeWidth={1.8} />
+              )}
             </div>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "#E2E8F0", margin: "0 0 3px" }}>
-              Kamera Lapangan Siaga
+              {cameraSource === "esp32" ? "Kamera ESP32-CAM Siaga" : "Kamera Lapangan Siaga"}
             </p>
             <p style={{ fontSize: "11.5px", color: "#94A3B8", margin: 0 }}>
-              Aktifkan kamera untuk deteksi hama langsung atau unggah foto sampel
+              {cameraSource === "esp32"
+                ? "Klik 'Hubungkan ESP32-CAM' untuk memicu kamera via MQTT & streaming on-demand"
+                : "Aktifkan kamera untuk deteksi hama langsung atau unggah foto sampel"}
             </p>
           </div>
         )}
       </div>
 
-      {/* Error message if camera permission blocked */}
+      {/* Error message if camera permission blocked or relay error */}
       {errorMsg && (
         <div
           style={{
@@ -601,10 +1045,10 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
           <>
             <motion.button
               whileTap={{ scale: 0.96 }}
-              onClick={() => startCamera()}
+              onClick={handleStartActiveCamera}
               style={{
                 flex: 1.5,
-                background: "#3B82F6",
+                background: cameraSource === "esp32" ? "#0EA5E9" : "#3B82F6",
                 color: "white",
                 border: "none",
                 borderRadius: "14px",
@@ -616,11 +1060,23 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "8px",
-                boxShadow: "var(--glow-primary)",
+                boxShadow:
+                  cameraSource === "esp32"
+                    ? "0 4px 14px rgba(14, 165, 233, 0.35)"
+                    : "var(--glow-primary)",
               }}
             >
-              <Camera size={18} strokeWidth={2.2} />
-              Buka Kamera Lapangan
+              {cameraSource === "esp32" ? (
+                <>
+                  <Radio size={18} strokeWidth={2.2} />
+                  Hubungkan ESP32-CAM
+                </>
+              ) : (
+                <>
+                  <Camera size={18} strokeWidth={2.2} />
+                  Buka Kamera Lapangan
+                </>
+              )}
             </motion.button>
 
             <motion.button
@@ -683,7 +1139,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
 
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={stopCamera}
+              onClick={handleStopActiveCamera}
               style={{
                 flex: 1,
                 background: "var(--bg-hover)",
