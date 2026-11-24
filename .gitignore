@@ -27,15 +27,17 @@ dist-ssr
 # Capacitor / Mobile Builds
 android/
 ios/
+*.apk
+*.aab
 
 # Local Version Changelog & Release Notes (Semantic Versioning)
 [0-9]*.[0-9]*.[0-9]*.md
 v[0-9]*.[0-9]*.[0-9]*.md
 
 # ML Training Environment, Datasets, Checkpoints & Exported Models
-dataset/
-dataset_merged/
-models/
+/dataset/
+/dataset_merged/
+/models/
 training/yolo11s-pose/
 training/runs/
 __pycache__/

@@ -42,6 +42,14 @@ import {
   saveSensorRecord,
   clearAllLocalRecords,
 } from "../services/indexedDbService";
+import {
+  getSavedAIEngineMode,
+  saveAIEngineMode,
+  getSavedAIAPIUrl,
+  saveAIAPIUrl,
+  checkPythonServerHealth,
+  type AIEngineMode,
+} from "../services/yoloInferenceService";
 
 export function SettingsScreen() {
   const navigate = useNavigate();
@@ -60,6 +68,28 @@ export function SettingsScreen() {
     const saved = localStorage.getItem(STORAGE_KEY_SIM_ENABLED);
     return saved !== null ? saved === "true" : true;
   });
+
+  // AI Vision Engine Configuration (Hybrid ONNX Edge vs Python best.pt API)
+  const [aiEngineMode, setAiEngineMode] = useState<AIEngineMode>(getSavedAIEngineMode);
+  const [aiApiUrl, setAiApiUrl] = useState<string>(getSavedAIAPIUrl);
+  const [aiApiStatus, setAiApiStatus] = useState<"idle" | "checking" | "online" | "offline">("idle");
+  const [aiApiDevice, setAiApiDevice] = useState<string>("");
+
+  const handleTestAIServer = async () => {
+    hapticMedium();
+    saveAIAPIUrl(aiApiUrl);
+    setAiApiStatus("checking");
+    const health = await checkPythonServerHealth(aiApiUrl, 2000);
+    if (health.online) {
+      setAiApiStatus("online");
+      setAiApiDevice(health.device || "cpu");
+      setToastMessage(`Server AI best.pt terhubung (${health.device || "cpu"})!`);
+    } else {
+      setAiApiStatus("offline");
+      setAiApiDevice("");
+      setToastMessage("Server Python tidak aktif — aplikasi otomatis memakai Edge ONNX.");
+    }
+  };
 
   // Sensor display mode: "focused" (2 parameters) vs "full_npk" (7-in-1 parameters)
   const [sensorMode, setSensorMode] = useState<SensorMode>(getSavedSensorMode);
@@ -654,6 +684,128 @@ export function SettingsScreen() {
                 </div>
               </div>
               <ChevronRight size={16} color="var(--border-strong)" />
+            </div>
+          </div>
+        </div>
+
+        {/* Engine AI Vision (YOLOv11s best.pt & Edge ONNX) */}
+        <div>
+          <p
+            style={{
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "var(--icon-muted)",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+            }}
+          >
+            AI Vision Engine (YOLOv11s)
+          </p>
+          <div
+            style={{
+              background: "var(--bg-card)",
+              borderRadius: "16px",
+              padding: "16px 18px",
+              boxShadow: "0px 2px 8px rgba(0,0,0,0.04)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                Mode Eksekusi Model Deteksi Hama
+              </p>
+              <p style={{ fontSize: "11.5px", color: "var(--icon-muted)", margin: "2px 0 0" }}>
+                Otomatis memilih server Python best.pt jika aktif, atau model ONNX offline di HP/Browser.
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+              {[
+                { id: "auto", label: "Auto Hybrid" },
+                { id: "onnx_edge", label: "Edge ONNX" },
+                { id: "python_api", label: "Python API" },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    hapticLight();
+                    const nextMode = opt.id as AIEngineMode;
+                    saveAIEngineMode(nextMode);
+                    setAiEngineMode(nextMode);
+                    setToastMessage(`Mode AI diubah ke ${opt.label}`);
+                  }}
+                  style={{
+                    padding: "8px 6px",
+                    borderRadius: "10px",
+                    border: aiEngineMode === opt.id ? "1.5px solid #3B82F6" : "1px solid var(--border-subtle)",
+                    background: aiEngineMode === opt.id ? "rgba(59, 130, 246, 0.12)" : "var(--bg-app)",
+                    color: aiEngineMode === opt.id ? "#2563EB" : "var(--text-secondary)",
+                    fontSize: "11.5px",
+                    fontWeight: aiEngineMode === opt.id ? 700 : 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <label style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+                URL Server Python Lokal (Opsional untuk Wi-Fi Offload)
+              </label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="text"
+                  value={aiApiUrl}
+                  onChange={(e) => setAiApiUrl(e.target.value)}
+                  onBlur={() => saveAIAPIUrl(aiApiUrl)}
+                  placeholder="http://localhost:8000"
+                  style={{
+                    flex: 1,
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    border: "1px solid var(--border-subtle)",
+                    background: "var(--bg-input)",
+                    color: "var(--text-primary)",
+                    fontSize: "12.5px",
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                />
+                <button
+                  onClick={handleTestAIServer}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "none",
+                    background: "#3B82F6",
+                    color: "white",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {aiApiStatus === "checking" ? "Cek..." : "Tes API"}
+                </button>
+              </div>
+              {aiApiStatus !== "idle" && aiApiStatus !== "checking" && (
+                <p
+                  style={{
+                    margin: "6px 0 0",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: aiApiStatus === "online" ? "#16A34A" : "#D97706",
+                  }}
+                >
+                  {aiApiStatus === "online"
+                    ? `✓ Server Python aktif (${aiApiDevice}) — mode offloading siap`
+                    : "⚡ Server Python offline — aplikasi memakai YOLOv11s Edge ONNX"}
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -26,9 +26,23 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { NPKSensorData } from "../types/sensor";
 import { PEST_DATABASE, PestDetectionResult } from "../utils/pestDatabase";
+import {
+  runYoloPestInference,
+  type YoloInferenceOutput,
+} from "../services/yoloInferenceService";
 
 interface FieldCameraCardProps {
   sensorData: NPKSensorData;
+}
+
+interface InferenceMeta {
+  engineUsed: YoloInferenceOutput["engineUsed"] | "preset";
+  inferMs?: number;
+  visualConfidence: number;
+  multimodalConfidence: number;
+  sensorFusionNote?: string;
+  detectionSummary?: string;
+  annotatedDataUrl?: string;
 }
 
 interface CapturedPhoto {
@@ -38,6 +52,9 @@ interface CapturedPhoto {
   moisture: number;
   ph: number;
   diagnosis?: PestDetectionResult;
+  engineUsed?: string;
+  inferMs?: number;
+  detectionSummary?: string;
 }
 
 export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
@@ -46,6 +63,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [activeDiagnosis, setActiveDiagnosis] = useState<PestDetectionResult | null>(null);
+  const [inferenceMeta, setInferenceMeta] = useState<InferenceMeta | null>(null);
   const [targetPreset, setTargetPreset] = useState<string>("auto");
   const [expandPrevention, setExpandPrevention] = useState<boolean>(true);
 
@@ -67,9 +85,13 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Save captured photos to localStorage
+  // Save captured photos to localStorage (guarded against quota overflow)
   useEffect(() => {
-    localStorage.setItem("iot_captured_photos", JSON.stringify(capturedPhotos));
+    try {
+      localStorage.setItem("iot_captured_photos", JSON.stringify(capturedPhotos));
+    } catch (err) {
+      console.warn("Penyimpanan galeri foto lokal penuh:", err);
+    }
   }, [capturedPhotos]);
 
   // Handle starting the camera
@@ -133,38 +155,130 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     }
   };
 
-  // Run AI Vision Scan
-  const runAIVisionScan = (customPresetKey?: string, capturedDataUrl?: string) => {
+  // Stamp sensor watermark at bottom of an image (after YOLO inference)
+  const addSensorWatermark = (baseDataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width || 640;
+        canvas.height = img.naturalHeight || img.height || 480;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(baseDataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const nowStr = new Intl.DateTimeFormat("id-ID", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date());
+
+        const bannerHeight = 44;
+        ctx.fillStyle = "rgba(15, 23, 42, 0.82)";
+        ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
+
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "bold 15px sans-serif";
+        ctx.fillText(
+          `Kelembaban: ${sensorData.moisture.toFixed(1)}% | pH: ${sensorData.ph.toFixed(1)}`,
+          14,
+          canvas.height - 17
+        );
+
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = "#CBD5E1";
+        const timeWidth = ctx.measureText(nowStr).width;
+        ctx.fillText(nowStr, canvas.width - timeWidth - 14, canvas.height - 17);
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
+      };
+      img.onerror = () => resolve(baseDataUrl);
+      img.src = baseDataUrl;
+    });
+  };
+
+  // Run AI Vision Scan (Real YOLOv11s Hybrid Inference or Manual Preset Simulation)
+  const runAIVisionScan = async (customPresetKey?: string, capturedDataUrl?: string) => {
     setIsScanning(true);
     setActiveDiagnosis(null);
+    setInferenceMeta(null);
 
-    // AI simulation delay with scanning effect
-    setTimeout(() => {
-      let chosenKey = customPresetKey || targetPreset;
-      if (chosenKey === "auto") {
-        // If auto, evaluate based on sensor environment & realistic agricultural probabilities
+    const chosenKey = customPresetKey || targetPreset;
+
+    // Mode Otomatis + ada gambar -> jalankan model nyata YOLOv11s (best.pt / ONNX Edge)
+    if (chosenKey === "auto" && capturedDataUrl) {
+      try {
+        const result = await runYoloPestInference(capturedDataUrl, sensorData);
+        const finalPhotoUrl = await addSensorWatermark(result.annotatedDataUrl);
+
+        setActiveDiagnosis(result.diagnosis);
+        setInferenceMeta({
+          engineUsed: result.engineUsed,
+          inferMs: result.inferMs,
+          visualConfidence: result.visualConfidence,
+          multimodalConfidence: result.multimodalConfidence,
+          sensorFusionNote: result.sensorFusionNote,
+          detectionSummary: result.detectionSummary,
+          annotatedDataUrl: finalPhotoUrl,
+        });
+        saveCapturedSnapshot(finalPhotoUrl, result.diagnosis, {
+          engineUsed: result.engineUsed,
+          inferMs: result.inferMs,
+          detectionSummary: result.detectionSummary,
+        });
+      } catch (err) {
+        console.error("Gagal menjalankan inferensi AI:", err);
+        setErrorMsg("Gagal memproses gambar pada model AI. Silakan coba ulangi.");
+      } finally {
+        setIsScanning(false);
+      }
+      return;
+    }
+
+    // Mode Preset Simulasi Manual (untuk demo tanpa kamera/foto)
+    setTimeout(async () => {
+      let resolvedKey = chosenKey;
+      if (resolvedKey === "auto") {
         if (sensorData.moisture > 78 && sensorData.ph < 6.0) {
-          chosenKey = "daun_layu_fusarium";
+          resolvedKey = "daun_layu_fusarium";
         } else if (sensorData.moisture < 50) {
-          chosenKey = "kutu_kebul";
+          resolvedKey = "kutu_kebul";
         } else {
-          const pestKeys = ["ulat_grayak", "kutu_kebul", "ulat_penggulung", "kutu_daun_aphids", "tanaman_sehat"];
-          chosenKey = pestKeys[Math.floor(Math.random() * pestKeys.length)];
+          resolvedKey = "tanaman_sehat";
         }
       }
 
-      const diagnosisResult = PEST_DATABASE[chosenKey] || PEST_DATABASE["ulat_grayak"];
+      const diagnosisResult = PEST_DATABASE[resolvedKey] || PEST_DATABASE["ulat_grayak"];
+      const finalPhotoUrl = capturedDataUrl ? await addSensorWatermark(capturedDataUrl) : undefined;
+
       setActiveDiagnosis(diagnosisResult);
+      setInferenceMeta({
+        engineUsed: "preset",
+        visualConfidence: diagnosisResult.confidence,
+        multimodalConfidence: diagnosisResult.confidence,
+        detectionSummary: "Simulasi Preset Uji Coba",
+        annotatedDataUrl: finalPhotoUrl,
+      });
       setIsScanning(false);
 
-      if (capturedDataUrl) {
-        saveCapturedSnapshot(capturedDataUrl, diagnosisResult);
+      if (finalPhotoUrl) {
+        saveCapturedSnapshot(finalPhotoUrl, diagnosisResult, {
+          engineUsed: "preset",
+          detectionSummary: "Simulasi Preset Uji Coba",
+        });
       }
-    }, 1500);
+    }, 600);
   };
 
   // Save snapshot to history
-  const saveCapturedSnapshot = (dataUrl: string, diagnosis?: PestDetectionResult) => {
+  const saveCapturedSnapshot = (
+    dataUrl: string,
+    diagnosis?: PestDetectionResult,
+    meta?: { engineUsed?: string; inferMs?: number; detectionSummary?: string }
+  ) => {
     const nowStr = new Intl.DateTimeFormat("id-ID", {
       day: "2-digit",
       month: "short",
@@ -180,12 +294,15 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
       moisture: sensorData.moisture,
       ph: sensorData.ph,
       diagnosis,
+      engineUsed: meta?.engineUsed,
+      inferMs: meta?.inferMs,
+      detectionSummary: meta?.detectionSummary,
     };
 
-    setCapturedPhotos((prev) => [newPhoto, ...prev.slice(0, 9)]);
+    setCapturedPhotos((prev) => [newPhoto, ...prev.slice(0, 5)]);
   };
 
-  // Capture snapshot from video feed
+  // Capture clean snapshot from video feed and run YOLOv11s AI inference
   const takeSnapshotAndScan = () => {
     if (!videoRef.current || !isCameraActive) return;
 
@@ -200,31 +317,8 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
 
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Watermark with sensor readings and timestamp
-      const nowStr = new Intl.DateTimeFormat("id-ID", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date());
-
-      const bannerHeight = 44;
-      ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
-      ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
-
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = "bold 15px sans-serif";
-      ctx.fillText(`💧 Kelembaban: ${sensorData.moisture.toFixed(1)}% | 🧪 pH: ${sensorData.ph.toFixed(1)}`, 14, canvas.height - 18);
-
-      ctx.font = "12px sans-serif";
-      ctx.fillStyle = "#CBD5E1";
-      const timeWidth = ctx.measureText(nowStr).width;
-      ctx.fillText(nowStr, canvas.width - timeWidth - 14, canvas.height - 18);
-
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-      runAIVisionScan(undefined, dataUrl);
+      const cleanDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      runAIVisionScan(undefined, cleanDataUrl);
     }
   };
 
@@ -376,7 +470,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
             outline: "none",
           }}
         >
-          <option value="auto">⚡ Otomatis (Scan AI Pintar)</option>
+          <option value="auto">⚡ Otomatis (YOLOv11s best.pt / ONNX)</option>
           <option value="ulat_grayak">🐛 Ulat Grayak (Pengerat)</option>
           <option value="kutu_kebul">🪰 Kutu Kebul (Vektor Kuning)</option>
           <option value="ulat_penggulung">🍃 Ulat Penggulung Daun</option>
@@ -807,7 +901,10 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
               </div>
 
               <button
-                onClick={() => setActiveDiagnosis(null)}
+                onClick={() => {
+                  setActiveDiagnosis(null);
+                  setInferenceMeta(null);
+                }}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -819,6 +916,93 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                 <X size={18} />
               </button>
             </div>
+
+            {/* Panel Transparansi Engine YOLOv11s & Hasil Bounding Box Nyata */}
+            {inferenceMeta && (
+              <div
+                style={{
+                  background: "var(--bg-card)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  border: "1px solid var(--border-card)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                  <span
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 800,
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                      background:
+                        inferenceMeta.engineUsed === "python_best_pt"
+                          ? "rgba(16, 185, 129, 0.15)"
+                          : inferenceMeta.engineUsed === "onnx_edge"
+                          ? "rgba(59, 130, 246, 0.15)"
+                          : "rgba(100, 116, 139, 0.15)",
+                      color:
+                        inferenceMeta.engineUsed === "python_best_pt"
+                          ? "#059669"
+                          : inferenceMeta.engineUsed === "onnx_edge"
+                          ? "#2563EB"
+                          : "var(--text-muted)",
+                    }}
+                  >
+                    {inferenceMeta.engineUsed === "python_best_pt"
+                      ? "🐍 YOLOv11s Python best.pt"
+                      : inferenceMeta.engineUsed === "onnx_edge"
+                      ? "⚡ YOLOv11s ONNX Edge"
+                      : inferenceMeta.engineUsed === "fallback"
+                      ? "🛡️ Fallback Sensor Heuristik"
+                      : "🎯 Simulasi Preset"}
+                  </span>
+                  {inferenceMeta.inferMs !== undefined && (
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)" }}>
+                      Waktu Inferensi: {inferenceMeta.inferMs} ms
+                    </span>
+                  )}
+                </div>
+
+                {inferenceMeta.annotatedDataUrl && (
+                  <div style={{ borderRadius: "12px", overflow: "hidden", background: "#0F172A" }}>
+                    <img
+                      src={inferenceMeta.annotatedDataUrl}
+                      alt="Hasil Deteksi Bounding Box YOLOv11s"
+                      style={{ width: "100%", maxHeight: "220px", objectFit: "contain", display: "block" }}
+                    />
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "11px" }}>
+                  <div style={{ background: "var(--bg-app)", borderRadius: "8px", padding: "7px 10px" }}>
+                    <span style={{ color: "var(--text-muted)", display: "block" }}>Skor Visual AI</span>
+                    <strong style={{ color: "var(--text-primary)", fontSize: "13px" }}>
+                      {inferenceMeta.visualConfidence}%
+                    </strong>
+                  </div>
+                  <div style={{ background: "var(--bg-app)", borderRadius: "8px", padding: "7px 10px" }}>
+                    <span style={{ color: "var(--text-muted)", display: "block" }}>Skor Multimodal (+IoT)</span>
+                    <strong style={{ color: "#2563EB", fontSize: "13px" }}>
+                      {inferenceMeta.multimodalConfidence}%
+                    </strong>
+                  </div>
+                </div>
+
+                {inferenceMeta.detectionSummary && (
+                  <p style={{ margin: 0, fontSize: "11.5px", fontWeight: 600, color: "var(--text-primary)" }}>
+                    📦 {inferenceMeta.detectionSummary}
+                  </p>
+                )}
+                {inferenceMeta.sensorFusionNote && (
+                  <p style={{ margin: 0, fontSize: "11px", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                    {inferenceMeta.sensorFusionNote}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Gejala Klinis */}
             <div
