@@ -110,6 +110,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     timestamp?: string;
     size?: string;
   } | null>(null);
+  const [hasReceivedFrame, setHasReceivedFrame] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -252,6 +253,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   // Start ESP32-CAM via WebSocket relay
   const startEspCamera = () => {
     setErrorMsg(null);
+    setHasReceivedFrame(false);
     stopEspCamera();
 
     try {
@@ -269,6 +271,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
 
       ws.onmessage = (event) => {
         if (event.data instanceof Blob) {
+          setHasReceivedFrame(true);
           if (espBlobUrlRef.current) {
             URL.revokeObjectURL(espBlobUrlRef.current);
           }
@@ -292,20 +295,24 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
         console.warn("WebSocket Relay Error:", err);
         setErrorMsg(`Gagal terhubung ke Relay WebSocket (${espRelayHost}). Pastikan backend Node.js berjalan di port 5000.`);
         setIsCameraActive(false);
+        setHasReceivedFrame(false);
       };
 
       ws.onclose = () => {
         setIsCameraActive(false);
+        setHasReceivedFrame(false);
         setEspFps(0);
       };
     } catch (err: any) {
       setErrorMsg(err.message || "Gagal menghubungkan ke ESP32 Relay");
       setIsCameraActive(false);
+      setHasReceivedFrame(false);
     }
   };
 
   // Stop ESP32 WebSocket relay stream
   const stopEspCamera = () => {
+    setHasReceivedFrame(false);
     if (espWsRef.current) {
       try {
         if (espWsRef.current.readyState === WebSocket.OPEN) {
@@ -886,16 +893,49 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
 
         {/* Image Stream for ESP32-CAM (Binary JPEG over WebSocket) */}
         {cameraSource === "esp32" && (
-          <img
-            ref={espImgRef}
-            alt="ESP32-CAM Live Feed"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              display: isCameraActive ? "block" : "none",
-            }}
-          />
+          <>
+            <img
+              ref={espImgRef}
+              alt="ESP32-CAM Live Feed"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: isCameraActive && hasReceivedFrame ? "block" : "none",
+              }}
+            />
+            {isCameraActive && !hasReceivedFrame && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  color: "#94A3B8",
+                  padding: "20px",
+                  textAlign: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    border: "3px solid rgba(14, 165, 233, 0.2)",
+                    borderTopColor: "#0EA5E9",
+                    animation: "spin 1s linear infinite",
+                  }}
+                />
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#E2E8F0" }}>
+                  Menerima stream dari ESP32-CAM...
+                </span>
+                <span style={{ fontSize: "11px", color: "#64748B" }}>
+                  ESP32 sedang mengirim frame video VGA
+                </span>
+              </div>
+            )}
+          </>
         )}
 
         {/* Real-Time AI Scanner Crosshair & Bounding Box */}
