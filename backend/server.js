@@ -16,15 +16,16 @@ const http = require("http");
 const url = require("url");
 const path = require("path");
 const fs = require("fs");
+const dotenv = require("dotenv");
+
+// Muat variabel lingkungan di baris paling awal dari folder backend/.env
+dotenv.config({ path: path.join(__dirname, ".env") });
+
 const express = require("express");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const mqtt = require("mqtt");
 const { WebSocketServer, WebSocket } = require("ws");
 const supabaseService = require("./services/supabaseService");
-
-// 1. Muat variabel lingkungan
-dotenv.config();
 
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "mqtt://broker.emqx.io:1883";

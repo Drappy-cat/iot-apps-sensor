@@ -9,7 +9,9 @@
 
 const { createClient } = require("@supabase/supabase-js");
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
+// Bersihkan URL dari akhiran /rest/v1/ atau trailing slash jika pengguna meng-copy dari REST endpoint
+const rawUrl = process.env.SUPABASE_URL || "";
+const SUPABASE_URL = rawUrl.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const BUCKET_NAME  = process.env.SUPABASE_BUCKET || "timelapse-tanaman";
 

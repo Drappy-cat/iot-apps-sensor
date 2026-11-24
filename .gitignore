@@ -77,5 +77,10 @@ ml_training/exports/*
 *.ino
 firmware/*.ino
 
+# Backend image uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+
 
 
