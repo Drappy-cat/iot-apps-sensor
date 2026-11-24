@@ -34,6 +34,8 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { NPKSensorData } from "../types/sensor";
 import { PEST_DATABASE, PestDetectionResult } from "../utils/pestDatabase";
+import { pushGeneralNotification } from "../services/localNotificationService";
+import { hapticWarning, hapticError } from "../services/hapticsService";
 
 interface FieldCameraCardProps {
   sensorData: NPKSensorData;
@@ -112,6 +114,19 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   } | null>(null);
   const [hasReceivedFrame, setHasReceivedFrame] = useState<boolean>(false);
 
+  interface CameraDisconnectAlert {
+    type: "warning" | "error";
+    title: string;
+    message: string;
+    timestamp: string;
+  }
+  const [disconnectAlert, setDisconnectAlert] = useState<CameraDisconnectAlert | null>(null);
+
+  const intentionalStopRef = useRef<boolean>(false);
+  const prevEspOnlineRef = useRef<boolean | null>(null);
+  const lastFrameTimeRef = useRef<number>(0);
+  const startStreamTimeRef = useRef<number>(0);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const espImgRef = useRef<HTMLImageElement | null>(null);
@@ -120,6 +135,41 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   const fpsCountRef = useRef<number>(0);
   const fpsTimerRef = useRef<number>(Date.now());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const triggerDisconnectAlert = (params: {
+    title: string;
+    message: string;
+    type?: "warning" | "error";
+    cooldownKey: string;
+  }) => {
+    const timeStr = new Date().toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    setDisconnectAlert({
+      type: params.type || "warning",
+      title: params.title,
+      message: params.message,
+      timestamp: timeStr,
+    });
+
+    if (params.type === "error") {
+      hapticError();
+    } else {
+      hapticWarning();
+    }
+
+    pushGeneralNotification({
+      title: params.title,
+      message: params.message,
+      type: params.type || "warning",
+      iconName: "AlertTriangle",
+      cooldownKey: params.cooldownKey,
+      cooldownMs: 12000,
+    });
+  };
 
   // Poll ESP32 relay status when in esp32 mode
   useEffect(() => {
@@ -135,12 +185,49 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
         });
         if (res.ok) {
           const data = await res.json();
-          if (isMounted) setEspStatus(data);
+          if (isMounted) {
+            setEspStatus(data);
+            // Deteksi jika ESP32 baru saja terputus / offline dari MQTT
+            if (prevEspOnlineRef.current === true && data.espOnline === false) {
+              triggerDisconnectAlert({
+                title: "ESP32-CAM Terputus (Offline)",
+                message: "Modul ESP32-CAM terputus dari jaringan Wi-Fi atau catu daya mati. Kamera tidak siap streaming.",
+                type: "error",
+                cooldownKey: "esp_cam_status_offline",
+              });
+              if (isCameraActive) {
+                stopEspCamera();
+              }
+            }
+            prevEspOnlineRef.current = data.espOnline;
+          }
         } else {
-          if (isMounted) setEspStatus(null);
+          if (isMounted) {
+            setEspStatus(null);
+            if (prevEspOnlineRef.current === true) {
+              triggerDisconnectAlert({
+                title: "Server Relay Tidak Merespons",
+                message: "Server relay backend kamera di port 5000 tidak dapat dihubungi.",
+                type: "warning",
+                cooldownKey: "esp_relay_not_ok",
+              });
+            }
+            prevEspOnlineRef.current = false;
+          }
         }
       } catch {
-        if (isMounted) setEspStatus(null);
+        if (isMounted) {
+          setEspStatus(null);
+          if (prevEspOnlineRef.current === true) {
+            triggerDisconnectAlert({
+              title: "Server Relay Offline",
+              message: "Tidak dapat terhubung ke server backend lokal (port 5000).",
+              type: "warning",
+              cooldownKey: "esp_relay_fetch_error",
+            });
+          }
+          prevEspOnlineRef.current = false;
+        }
       }
     };
 
@@ -153,7 +240,36 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [cameraSource, espRelayHost]);
+  }, [cameraSource, espRelayHost, isCameraActive]);
+
+  // Watchdog untuk memantau apakah aliran frame ESP32 terhenti / membeku
+  useEffect(() => {
+    if (!isCameraActive || cameraSource !== "esp32") return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      // Jika kamera aktif tetapi belum menerima frame sama sekali setelah 9 detik
+      if (!hasReceivedFrame && startStreamTimeRef.current > 0 && now - startStreamTimeRef.current > 9000) {
+        triggerDisconnectAlert({
+          title: "Kamera Belum Mengirim Video",
+          message: "Relay terhubung, namun ESP32-CAM belum mengirim aliran gambar VGA. Periksa catu daya 5V dan kestabilan Wi-Fi modul kamera.",
+          type: "warning",
+          cooldownKey: "esp_cam_no_frame_received",
+        });
+      }
+      // Jika sudah pernah menerima frame, tetapi terhenti > 6 detik
+      if (hasReceivedFrame && lastFrameTimeRef.current > 0 && now - lastFrameTimeRef.current > 6000) {
+        triggerDisconnectAlert({
+          title: "Aliran Video ESP32 Terhenti",
+          message: "Tidak menerima frame video baru dari kamera selama lebih dari 6 detik. Sambungan video mungkin terputus.",
+          type: "warning",
+          cooldownKey: "esp_cam_stalled",
+        });
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [isCameraActive, cameraSource, hasReceivedFrame]);
 
   // Fetch riwayat foto timelapse dari server / Supabase
   const fetchTimelapsePhotos = async () => {
@@ -200,7 +316,9 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
 
   // Handle starting device webcam/phone camera
   const startCamera = async (mode: "environment" | "user" = facingMode) => {
+    intentionalStopRef.current = false;
     setErrorMsg(null);
+    setDisconnectAlert(null);
     stopCamera();
 
     try {
@@ -220,6 +338,20 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
+      stream.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          if (!intentionalStopRef.current) {
+            triggerDisconnectAlert({
+              title: "Kamera Perangkat Terputus",
+              message: "Akses perangkat webcam atau kamera smartphone terputus.",
+              type: "warning",
+              cooldownKey: "device_camera_disconnected",
+            });
+            stopCamera();
+          }
+        };
+      });
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => {});
@@ -227,19 +359,26 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
       setIsCameraActive(true);
     } catch (err: any) {
       console.warn("Gagal mengakses kamera:", err);
+      let msg = err.message || "Gagal menghubungkan ke kamera lapangan.";
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        setErrorMsg("Izin kamera ditolak. Berikan izin kamera di browser untuk memantau tanaman langsung.");
+        msg = "Izin kamera ditolak. Berikan izin kamera di browser untuk memantau tanaman langsung.";
       } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-        setErrorMsg("Tidak ada perangkat kamera yang terdeteksi di perangkat ini.");
-      } else {
-        setErrorMsg(err.message || "Gagal menghubungkan ke kamera lapangan.");
+        msg = "Tidak ada perangkat kamera yang terdeteksi di perangkat ini.";
       }
+      setErrorMsg(msg);
+      triggerDisconnectAlert({
+        title: "Gagal Mengakses Kamera",
+        message: msg,
+        type: "error",
+        cooldownKey: "device_camera_error",
+      });
       setIsCameraActive(false);
     }
   };
 
   // Stop device webcam stream
   const stopCamera = () => {
+    intentionalStopRef.current = true;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -252,8 +391,12 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
 
   // Start ESP32-CAM via WebSocket relay
   const startEspCamera = () => {
+    intentionalStopRef.current = false;
     setErrorMsg(null);
+    setDisconnectAlert(null);
     setHasReceivedFrame(false);
+    startStreamTimeRef.current = Date.now();
+    lastFrameTimeRef.current = Date.now();
     stopEspCamera();
 
     try {
@@ -267,11 +410,16 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
         console.log("WebSocket client terhubung ke relay:", wsUrl);
         ws.send(JSON.stringify({ action: "START" }));
         setIsCameraActive(true);
+        startStreamTimeRef.current = Date.now();
+        lastFrameTimeRef.current = Date.now();
       };
 
       ws.onmessage = (event) => {
         if (event.data instanceof Blob) {
           setHasReceivedFrame(true);
+          lastFrameTimeRef.current = Date.now();
+          if (disconnectAlert) setDisconnectAlert(null);
+
           if (espBlobUrlRef.current) {
             URL.revokeObjectURL(espBlobUrlRef.current);
           }
@@ -293,25 +441,52 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
 
       ws.onerror = (err) => {
         console.warn("WebSocket Relay Error:", err);
-        setErrorMsg(`Gagal terhubung ke Relay WebSocket (${espRelayHost}). Pastikan backend Node.js berjalan di port 5000.`);
+        const errMsg = `Gagal terhubung ke Relay WebSocket (${espRelayHost}). Pastikan backend Node.js berjalan di port 5000.`;
+        setErrorMsg(errMsg);
         setIsCameraActive(false);
         setHasReceivedFrame(false);
+        if (!intentionalStopRef.current) {
+          triggerDisconnectAlert({
+            title: "Relay Kamera Terputus",
+            message: errMsg,
+            type: "error",
+            cooldownKey: "esp_ws_error",
+          });
+        }
       };
 
       ws.onclose = () => {
         setIsCameraActive(false);
         setHasReceivedFrame(false);
         setEspFps(0);
+        if (!intentionalStopRef.current) {
+          triggerDisconnectAlert({
+            title: "Koneksi Kamera ESP32 Terputus",
+            message: "Koneksi streaming video ke ESP32 terputus. Kamera beralih ke mode siaga hemat daya.",
+            type: "warning",
+            cooldownKey: "esp_ws_closed_unexpected",
+          });
+        }
       };
     } catch (err: any) {
-      setErrorMsg(err.message || "Gagal menghubungkan ke ESP32 Relay");
+      const errMsg = err.message || "Gagal menghubungkan ke ESP32 Relay";
+      setErrorMsg(errMsg);
       setIsCameraActive(false);
       setHasReceivedFrame(false);
+      triggerDisconnectAlert({
+        title: "Gagal Menghubungkan Kamera",
+        message: errMsg,
+        type: "error",
+        cooldownKey: "esp_ws_catch_error",
+      });
     }
   };
 
   // Stop ESP32 WebSocket relay stream
   const stopEspCamera = () => {
+    intentionalStopRef.current = true;
+    startStreamTimeRef.current = 0;
+    lastFrameTimeRef.current = 0;
     setHasReceivedFrame(false);
     if (espWsRef.current) {
       try {
@@ -338,7 +513,9 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   // Handle switching camera source
   const handleSwitchSource = (source: "device" | "esp32") => {
     if (source === cameraSource) return;
+    intentionalStopRef.current = true;
     setErrorMsg(null);
+    setDisconnectAlert(null);
     if (isCameraActive) {
       if (cameraSource === "device") stopCamera();
       else stopEspCamera();
@@ -356,6 +533,8 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
   };
 
   const handleStopActiveCamera = () => {
+    intentionalStopRef.current = true;
+    setDisconnectAlert(null);
     if (cameraSource === "device") {
       stopCamera();
     } else {
@@ -1097,24 +1276,45 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                 width: "48px",
                 height: "48px",
                 borderRadius: "50%",
-                background: "rgba(255,255,255,0.08)",
+                background: disconnectAlert ? "rgba(239, 68, 68, 0.18)" : "rgba(255,255,255,0.08)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 margin: "0 auto 8px",
               }}
             >
-              {cameraSource === "esp32" ? (
+              {disconnectAlert ? (
+                <WifiOff size={24} color="#EF4444" strokeWidth={1.8} />
+              ) : cameraSource === "esp32" ? (
                 <Radio size={24} color="#38BDF8" strokeWidth={1.8} />
               ) : (
                 <Camera size={24} color="#CBD5E1" strokeWidth={1.8} />
               )}
             </div>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#E2E8F0", margin: "0 0 3px" }}>
-              {cameraSource === "esp32" ? "Kamera ESP32-CAM Siaga" : "Kamera Lapangan Siaga"}
+            <p
+              style={{
+                fontSize: "13px",
+                fontWeight: 700,
+                color: disconnectAlert ? "#FCA5A5" : "#E2E8F0",
+                margin: "0 0 3px",
+              }}
+            >
+              {disconnectAlert
+                ? "Koneksi Kamera Terputus"
+                : cameraSource === "esp32"
+                ? "Kamera ESP32-CAM Siaga"
+                : "Kamera Lapangan Siaga"}
             </p>
-            <p style={{ fontSize: "11.5px", color: "#94A3B8", margin: 0 }}>
-              {cameraSource === "esp32"
+            <p
+              style={{
+                fontSize: "11.5px",
+                color: disconnectAlert ? "#F87171" : "#94A3B8",
+                margin: 0,
+              }}
+            >
+              {disconnectAlert
+                ? "Koneksi stream kamera terputus. Klik 'Hubungkan Ulang' untuk mencoba lagi."
+                : cameraSource === "esp32"
                 ? "Klik 'Hubungkan ESP32-CAM' untuk memicu kamera via MQTT & streaming on-demand"
                 : "Aktifkan kamera untuk deteksi hama langsung atau unggah foto sampel"}
             </p>
@@ -1122,8 +1322,165 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
         )}
       </div>
 
-      {/* Error message if camera permission blocked or relay error */}
-      {errorMsg && (
+      {/* Real-time Camera Disconnect Notification Banner */}
+      <AnimatePresence>
+        {disconnectAlert && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              padding: "12px 14px",
+              borderRadius: "14px",
+              background:
+                disconnectAlert.type === "error"
+                  ? "linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(185, 28, 28, 0.05))"
+                  : "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(217, 119, 6, 0.05))",
+              border: `1px solid ${
+                disconnectAlert.type === "error"
+                  ? "rgba(239, 68, 68, 0.35)"
+                  : "rgba(245, 158, 11, 0.35)"
+              }`,
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.05)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "8px",
+                    background:
+                      disconnectAlert.type === "error"
+                        ? "rgba(239, 68, 68, 0.18)"
+                        : "rgba(245, 158, 11, 0.18)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: disconnectAlert.type === "error" ? "#EF4444" : "#F59E0B",
+                    flexShrink: 0,
+                  }}
+                >
+                  {disconnectAlert.type === "error" ? (
+                    <AlertCircle size={16} />
+                  ) : (
+                    <AlertTriangle size={16} />
+                  )}
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: disconnectAlert.type === "error" ? "#EF4444" : "#D97706",
+                    }}
+                  >
+                    {disconnectAlert.title}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "10.5px",
+                      color: "var(--text-secondary)",
+                      marginTop: "1px",
+                    }}
+                  >
+                    {disconnectAlert.timestamp}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDisconnectAlert(null)}
+                title="Tutup Notifikasi"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  padding: "4px",
+                  borderRadius: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: "12px",
+                lineHeight: 1.45,
+                color: "var(--text-primary)",
+              }}
+            >
+              {disconnectAlert.message}
+            </p>
+
+            {cameraSource === "esp32" && (
+              <div style={{ display: "flex", gap: "8px", marginTop: "2px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDisconnectAlert(null);
+                    startEspCamera();
+                  }}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "8px",
+                    background: "#0EA5E9",
+                    color: "#FFFFFF",
+                    border: "none",
+                    fontSize: "11.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: "0 2px 6px rgba(14, 165, 233, 0.3)",
+                  }}
+                >
+                  <RefreshCw size={13} />
+                  Hubungkan Ulang
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDisconnectAlert(null)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "8px",
+                    background: "var(--bg-hover)",
+                    color: "var(--text-secondary)",
+                    border: "1px solid var(--border-card)",
+                    fontSize: "11.5px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  Abaikan
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Error message fallback if no disconnect alert */}
+      {errorMsg && !disconnectAlert && (
         <div
           style={{
             padding: "10px 14px",

@@ -131,12 +131,12 @@ async function sendLocalNotification(
 // ─── In-App Notification History ─────────────────────────────────────
 export interface InAppNotification {
   id: number;
-  type: "warning" | "error";
+  type: "warning" | "error" | "info" | "success";
   title: string;
   message: string;
   time: string;
   read: boolean;
-  iconName: "Droplets" | "Activity" | "AlertTriangle" | "Zap";
+  iconName: "Droplets" | "Activity" | "AlertTriangle" | "Zap" | "Info" | "CheckCircle2" | "Sparkles" | "FlaskConical";
 }
 
 const ICON_MAP: Record<AlertType, InAppNotification["iconName"]> = {
@@ -145,6 +145,79 @@ const ICON_MAP: Record<AlertType, InAppNotification["iconName"]> = {
   ph_alkaline: "Activity",
   temp_extreme: "Zap",
 };
+
+const generalCooldownMap: Map<string, number> = new Map();
+
+/**
+ * Push an arbitrary event notification into in-app notification center and OS-level alert.
+ * Supports cooldown to prevent notification flooding.
+ */
+export async function pushGeneralNotification(params: {
+  title: string;
+  message: string;
+  type?: "warning" | "error" | "info" | "success";
+  iconName?: InAppNotification["iconName"];
+  cooldownKey?: string;
+  cooldownMs?: number;
+}): Promise<boolean> {
+  const {
+    title,
+    message,
+    type = "warning",
+    iconName = "AlertTriangle",
+    cooldownKey,
+    cooldownMs = 15000,
+  } = params;
+
+  if (cooldownKey) {
+    const lastTime = generalCooldownMap.get(cooldownKey) || 0;
+    if (Date.now() - lastTime < cooldownMs) {
+      return false;
+    }
+    generalCooldownMap.set(cooldownKey, Date.now());
+  }
+
+  const storageKey = "iot_notifications";
+  let existing: InAppNotification[] = [];
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) existing = JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const newNotif: InAppNotification = {
+    id: Date.now(),
+    type,
+    title,
+    message,
+    time: timeStr,
+    read: false,
+    iconName,
+  };
+
+  existing.unshift(newNotif);
+  if (existing.length > 50) existing = existing.slice(0, 50);
+  localStorage.setItem(storageKey, JSON.stringify(existing));
+  window.dispatchEvent(new CustomEvent("iot_notifications_updated"));
+
+  const hasPerm = await hasNotificationPermission();
+  if (hasPerm) {
+    await sendLocalNotification(
+      (Date.now() % 90000) + 10000,
+      `⚠️ ${title}`,
+      message
+    );
+  }
+
+  return true;
+}
 
 function saveInAppNotification(rule: AlertRule, data: NPKSensorData): void {
   const storageKey = "iot_notifications";
