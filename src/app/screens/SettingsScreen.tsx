@@ -48,7 +48,12 @@ import {
   getSavedAIAPIUrl,
   saveAIAPIUrl,
   checkPythonServerHealth,
+  getSavedAIRamPreference,
+  saveAIRamPreference,
+  resolveDeviceRamProfile,
+  RAM_THRESHOLD_GB,
   type AIEngineMode,
+  type AIRamPreference,
 } from "../services/yoloInferenceService";
 
 export function SettingsScreen() {
@@ -69,17 +74,19 @@ export function SettingsScreen() {
     return saved !== null ? saved === "true" : true;
   });
 
-  // AI Vision Engine Configuration (Hybrid ONNX Edge vs Python best.pt API)
+  // AI Vision Engine Configuration (Hybrid ONNX Edge vs Python best.pt API + Profil RAM)
   const [aiEngineMode, setAiEngineMode] = useState<AIEngineMode>(getSavedAIEngineMode);
+  const [aiRamPref, setAiRamPref] = useState<AIRamPreference>(getSavedAIRamPreference);
   const [aiApiUrl, setAiApiUrl] = useState<string>(getSavedAIAPIUrl);
   const [aiApiStatus, setAiApiStatus] = useState<"idle" | "checking" | "online" | "offline">("idle");
   const [aiApiDevice, setAiApiDevice] = useState<string>("");
+  const resolvedRamInfo = resolveDeviceRamProfile(aiRamPref);
 
   const handleTestAIServer = async () => {
     hapticMedium();
     saveAIAPIUrl(aiApiUrl);
     setAiApiStatus("checking");
-    const health = await checkPythonServerHealth(aiApiUrl, 2000);
+    const health = await checkPythonServerHealth(aiApiUrl, 2000, true);
     if (health.online) {
       setAiApiStatus("online");
       setAiApiDevice(health.device || "cpu");
@@ -751,6 +758,69 @@ export function SettingsScreen() {
                   {opt.label}
                 </button>
               ))}
+            </div>
+
+            {/* Deklarasi Profil Adaptif RAM (< 6 GB vs >= 6 GB) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div>
+                <p style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                  Deklarasi Profil RAM (&lt; {RAM_THRESHOLD_GB} GB vs &ge; {RAM_THRESHOLD_GB} GB)
+                </p>
+                <p style={{ fontSize: "11px", color: "var(--icon-muted)", margin: "2px 0 0" }}>
+                  RAM &lt; 6 GB memakai kompresi ekstrem UINT8; RAM &ge; 6 GB memakai delay rendah + pre-warmup.
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+                {[
+                  { id: "auto", label: "Auto (6 GB)" },
+                  { id: "extreme_low_ram", label: "< 6 GB Ekstrem" },
+                  { id: "balanced_low_latency", label: ">= 6 GB Cepat" },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => {
+                      hapticLight();
+                      const nextPref = opt.id as AIRamPreference;
+                      saveAIRamPreference(nextPref);
+                      setAiRamPref(nextPref);
+                      const info = resolveDeviceRamProfile(nextPref);
+                      setToastMessage(`Profil AI: ${info.profile.label}`);
+                    }}
+                    style={{
+                      padding: "8px 6px",
+                      borderRadius: "10px",
+                      border: aiRamPref === opt.id ? "1.5px solid #10B981" : "1px solid var(--border-subtle)",
+                      background: aiRamPref === opt.id ? "rgba(16, 185, 129, 0.12)" : "var(--bg-app)",
+                      color: aiRamPref === opt.id ? "#059669" : "var(--text-secondary)",
+                      fontSize: "11px",
+                      fontWeight: aiRamPref === opt.id ? 700 : 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  background: "var(--bg-app)",
+                  borderRadius: "10px",
+                  padding: "8px 10px",
+                  fontSize: "11px",
+                  color: "var(--text-secondary)",
+                  lineHeight: 1.45,
+                  border: "1px solid var(--border-subtle)",
+                }}
+              >
+                <div>
+                  <strong>Aktif:</strong> {resolvedRamInfo.profile.label}
+                </div>
+                <div>
+                  Perangkat: RAM {resolvedRamInfo.detectedRamGB !== null ? `${resolvedRamInfo.detectedRamGB} GB` : "Tidak terekspos"} • CPU {resolvedRamInfo.detectedCores} core • Arena Memori: {resolvedRamInfo.profile.enableCpuMemArena ? "Aktif" : "Hemat RAM"} ({resolvedRamInfo.profile.modelUrl.split("/").pop()})
+                </div>
+              </div>
             </div>
 
             <div>

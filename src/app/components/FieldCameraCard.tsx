@@ -28,6 +28,8 @@ import { NPKSensorData } from "../types/sensor";
 import { PEST_DATABASE, PestDetectionResult } from "../utils/pestDatabase";
 import {
   runYoloPestInference,
+  prewarmYoloSession,
+  resolveDeviceRamProfile,
   type YoloInferenceOutput,
 } from "../services/yoloInferenceService";
 
@@ -43,6 +45,7 @@ interface InferenceMeta {
   sensorFusionNote?: string;
   detectionSummary?: string;
   annotatedDataUrl?: string;
+  ramProfileBadge?: string;
 }
 
 interface CapturedPhoto {
@@ -121,6 +124,9 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
         videoRef.current.play().catch(() => {});
       }
       setIsCameraActive(true);
+      setTimeout(() => {
+        void prewarmYoloSession();
+      }, 150);
     } catch (err: any) {
       console.warn("Gagal mengakses kamera:", err);
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
@@ -223,6 +229,7 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
           sensorFusionNote: result.sensorFusionNote,
           detectionSummary: result.detectionSummary,
           annotatedDataUrl: finalPhotoUrl,
+          ramProfileBadge: result.ramProfileBadge,
         });
         saveCapturedSnapshot(finalPhotoUrl, result.diagnosis, {
           engineUsed: result.engineUsed,
@@ -310,14 +317,19 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
     setTimeout(() => setFlashEffect(false), 200);
 
     const video = videoRef.current;
+    const { profile } = resolveDeviceRamProfile();
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const scale = Math.min(1, profile.maxSnapshotPx / Math.max(vw, vh));
+
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    canvas.width = Math.max(16, Math.round(vw * scale));
+    canvas.height = Math.max(16, Math.round(vh * scale));
     const ctx = canvas.getContext("2d");
 
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const cleanDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      const cleanDataUrl = canvas.toDataURL("image/jpeg", profile.jpegQuality);
       runAIVisionScan(undefined, cleanDataUrl);
     }
   };
@@ -931,34 +943,50 @@ export function FieldCameraCard({ sensorData }: FieldCameraCardProps) {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
-                  <span
-                    style={{
-                      fontSize: "10.5px",
-                      fontWeight: 800,
-                      padding: "3px 8px",
-                      borderRadius: "6px",
-                      background:
-                        inferenceMeta.engineUsed === "python_best_pt"
-                          ? "rgba(16, 185, 129, 0.15)"
-                          : inferenceMeta.engineUsed === "onnx_edge"
-                          ? "rgba(59, 130, 246, 0.15)"
-                          : "rgba(100, 116, 139, 0.15)",
-                      color:
-                        inferenceMeta.engineUsed === "python_best_pt"
-                          ? "#059669"
-                          : inferenceMeta.engineUsed === "onnx_edge"
-                          ? "#2563EB"
-                          : "var(--text-muted)",
-                    }}
-                  >
-                    {inferenceMeta.engineUsed === "python_best_pt"
-                      ? "🐍 YOLOv11s Python best.pt"
-                      : inferenceMeta.engineUsed === "onnx_edge"
-                      ? "⚡ YOLOv11s ONNX Edge"
-                      : inferenceMeta.engineUsed === "fallback"
-                      ? "🛡️ Fallback Sensor Heuristik"
-                      : "🎯 Simulasi Preset"}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <span
+                      style={{
+                        fontSize: "10.5px",
+                        fontWeight: 800,
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        background:
+                          inferenceMeta.engineUsed === "python_best_pt"
+                            ? "rgba(16, 185, 129, 0.15)"
+                            : inferenceMeta.engineUsed === "onnx_edge"
+                            ? "rgba(59, 130, 246, 0.15)"
+                            : "rgba(100, 116, 139, 0.15)",
+                        color:
+                          inferenceMeta.engineUsed === "python_best_pt"
+                            ? "#059669"
+                            : inferenceMeta.engineUsed === "onnx_edge"
+                            ? "#2563EB"
+                            : "var(--text-muted)",
+                      }}
+                    >
+                      {inferenceMeta.engineUsed === "python_best_pt"
+                        ? "🐍 YOLOv11s Python best.pt"
+                        : inferenceMeta.engineUsed === "onnx_edge"
+                        ? "⚡ YOLOv11s ONNX Edge"
+                        : inferenceMeta.engineUsed === "fallback"
+                        ? "🛡️ Fallback Sensor Heuristik"
+                        : "🎯 Simulasi Preset"}
+                    </span>
+                    {inferenceMeta.ramProfileBadge && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          padding: "3px 7px",
+                          borderRadius: "6px",
+                          background: "rgba(16, 185, 129, 0.12)",
+                          color: "#059669",
+                        }}
+                      >
+                        {inferenceMeta.ramProfileBadge}
+                      </span>
+                    )}
+                  </div>
                   {inferenceMeta.inferMs !== undefined && (
                     <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)" }}>
                       Waktu Inferensi: {inferenceMeta.inferMs} ms

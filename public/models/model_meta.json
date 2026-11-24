@@ -1,16 +1,32 @@
 {
-  "version": "4.0.0",
+  "version": "4.2.0",
   "architecture": "YOLOv11s",
   "sourceWeights": "models/trained_weights/yolo11s_6cls_e50/weights/best.pt",
-  "onnxFile": "/models/yolo11s_6cls.onnx",
-  "onnxSizeMB": 36.18,
-  "imgsz": 640,
+  "onnxFile": "/models/yolo11s_416.onnx",
+  "onnxQuantizedFile": "/models/yolo11s_416_uint8.onnx",
+  "onnxSizeMB": 36.09,
+  "onnxQuantizedSizeMB": 9.3,
+  "imgsz": 416,
   "epochs": 50,
   "outputShape": [
     1,
     10,
-    8400
+    3549
   ],
+  "profiles": {
+    "extreme_low_ram": {
+      "ramCondition": "< 6 GB",
+      "onnxFile": "/models/yolo11s_416_uint8.onnx",
+      "sizeMB": 9.3,
+      "imgsz": 416
+    },
+    "balanced_low_latency": {
+      "ramCondition": ">= 6 GB",
+      "onnxFile": "/models/yolo11s_416.onnx",
+      "sizeMB": 36.09,
+      "imgsz": 416
+    }
+  },
   "metrics": {
     "mAP50": 0.7454,
     "mAP50_95": 0.48024,

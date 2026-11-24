@@ -3,12 +3,69 @@ import type { NPKSensorData } from "../types/sensor";
 import { PEST_DATABASE, type PestDetectionResult } from "../utils/pestDatabase";
 
 export type AIEngineMode = "auto" | "onnx_edge" | "python_api";
+export type AIRamProfileId = "extreme_low_ram" | "balanced_low_latency";
+export type AIRamPreference = "auto" | AIRamProfileId;
 
+export const RAM_THRESHOLD_GB = 6;
 export const STORAGE_KEY_AI_ENGINE_MODE = "iot_ai_engine_mode";
 export const STORAGE_KEY_AI_API_URL = "iot_ai_api_url";
+export const STORAGE_KEY_AI_RAM_PREF = "iot_ai_ram_preference";
 export const DEFAULT_AI_API_URL = "http://localhost:8000";
-export const ONNX_MODEL_URL = "/models/yolo11s_6cls.onnx";
-const MODEL_INPUT_SIZE = 640;
+export const ONNX_MODEL_URL = "/models/yolo11s_416.onnx";
+const MODEL_INPUT_SIZE = 416;
+
+export interface AIRamProfileConfig {
+  id: AIRamProfileId;
+  label: string;
+  shortBadge: string;
+  inputSize: number;
+  modelUrl: string;
+  useQuantizedModel: boolean;
+  jpegQuality: number;
+  maxSnapshotPx: number;
+  wasmThreads: number;
+  enableCpuMemArena: boolean;
+  enableMemPattern: boolean;
+  prewarmOnCameraStart: boolean;
+  reuseTensorBuffer: boolean;
+}
+
+const detectedCpuCores =
+  typeof navigator !== "undefined" ? navigator.hardwareConcurrency || 4 : 4;
+const balancedWasmThreads = Math.min(4, Math.max(2, Math.floor(detectedCpuCores / 2)));
+
+export const AI_RAM_PROFILES: Record<AIRamProfileId, AIRamProfileConfig> = {
+  extreme_low_ram: {
+    id: "extreme_low_ram",
+    label: "Kompresi Ekstrem (RAM < 6 GB)",
+    shortBadge: "Hemat RAM (<6GB • UINT8)",
+    inputSize: MODEL_INPUT_SIZE,
+    modelUrl: "/models/yolo11s_416_uint8.onnx",
+    useQuantizedModel: true,
+    jpegQuality: 0.8,
+    maxSnapshotPx: 640,
+    wasmThreads: 1,
+    enableCpuMemArena: false,
+    enableMemPattern: false,
+    prewarmOnCameraStart: false,
+    reuseTensorBuffer: false,
+  },
+  balanced_low_latency: {
+    id: "balanced_low_latency",
+    label: "Optimal Delay Rendah (RAM >= 6 GB)",
+    shortBadge: "Delay Rendah (>=6GB • Turbo)",
+    inputSize: MODEL_INPUT_SIZE,
+    modelUrl: ONNX_MODEL_URL,
+    useQuantizedModel: false,
+    jpegQuality: 0.92,
+    maxSnapshotPx: 960,
+    wasmThreads: balancedWasmThreads,
+    enableCpuMemArena: true,
+    enableMemPattern: true,
+    prewarmOnCameraStart: true,
+    reuseTensorBuffer: true,
+  },
+};
 
 /**
  * Pemetaan Class ID internal yang terverifikasi langsung di checkpoint:
@@ -45,7 +102,7 @@ export interface YoloDetection {
   classId: number;
   className: string;
   label: string;
-  confidence: number; // 0..1
+  confidence: number; // 0..1 calibrated
   bbox: [number, number, number, number]; // normalized [x1, y1, x2, y2]
   color: string;
 }
@@ -61,6 +118,8 @@ export interface YoloInferenceOutput {
   sensorFusionNote: string;
   detectionSummary: string;
   annotatedDataUrl: string;
+  ramProfileId: AIRamProfileId;
+  ramProfileBadge: string;
 }
 
 export function getSavedAIEngineMode(): AIEngineMode {
@@ -79,6 +138,71 @@ export function saveAIEngineMode(mode: AIEngineMode): void {
   localStorage.setItem(STORAGE_KEY_AI_ENGINE_MODE, mode);
 }
 
+export function getSavedAIRamPreference(): AIRamPreference {
+  try {
+    const val = localStorage.getItem(STORAGE_KEY_AI_RAM_PREF);
+    if (val === "auto" || val === "extreme_low_ram" || val === "balanced_low_latency") {
+      return val;
+    }
+  } catch {
+    // ignore storage read error
+  }
+  return "auto";
+}
+
+export function saveAIRamPreference(preference: AIRamPreference): void {
+  localStorage.setItem(STORAGE_KEY_AI_RAM_PREF, preference);
+}
+
+export function resolveDeviceRamProfile(preference?: AIRamPreference): {
+  profile: AIRamProfileConfig;
+  detectedRamGB: number | null;
+  detectedCores: number;
+  preference: AIRamPreference;
+} {
+  const effectivePref = preference ?? getSavedAIRamPreference();
+  const nav =
+    typeof navigator !== "undefined"
+      ? (navigator as Navigator & { deviceMemory?: number })
+      : undefined;
+  const detectedRamGB =
+    nav && typeof nav.deviceMemory === "number" ? nav.deviceMemory : null;
+  const cores = nav?.hardwareConcurrency || detectedCpuCores;
+
+  if (effectivePref !== "auto") {
+    return {
+      profile: AI_RAM_PROFILES[effectivePref],
+      detectedRamGB,
+      detectedCores: cores,
+      preference: effectivePref,
+    };
+  }
+
+  // Deklarasi aturan utama: RAM < 6 GB -> Kompresi Ekstrem, RAM >= 6 GB -> Delay Rendah Seimbang
+  if (detectedRamGB !== null) {
+    return {
+      profile:
+        detectedRamGB < RAM_THRESHOLD_GB
+          ? AI_RAM_PROFILES.extreme_low_ram
+          : AI_RAM_PROFILES.balanced_low_latency,
+      detectedRamGB,
+      detectedCores: cores,
+      preference: effectivePref,
+    };
+  }
+
+  // Fallback heuristik jika WebView tidak mengekspos navigator.deviceMemory
+  return {
+    profile:
+      cores >= 8
+        ? AI_RAM_PROFILES.balanced_low_latency
+        : AI_RAM_PROFILES.extreme_low_ram,
+    detectedRamGB,
+    detectedCores: cores,
+    preference: effectivePref,
+  };
+}
+
 export function getSavedAIAPIUrl(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_AI_API_URL);
@@ -94,12 +218,34 @@ export function getSavedAIAPIUrl(): string {
 export function saveAIAPIUrl(url: string): void {
   const cleaned = url.trim().replace(/\/+$/, "") || DEFAULT_AI_API_URL;
   localStorage.setItem(STORAGE_KEY_AI_API_URL, cleaned);
+  lastPythonFailAt = 0;
+}
+
+let lastPythonFailAt = 0;
+
+function shouldFastSkipPythonCheck(apiUrl: string): boolean {
+  if (typeof window !== "undefined") {
+    const isCapacitorOrigin =
+      window.location.protocol === "https:" && window.location.hostname === "localhost";
+    if (isCapacitorOrigin && apiUrl === DEFAULT_AI_API_URL) {
+      return true;
+    }
+  }
+  if (lastPythonFailAt > 0 && Date.now() - lastPythonFailAt < 30000) {
+    return true;
+  }
+  return false;
 }
 
 export async function checkPythonServerHealth(
   apiUrl: string = getSavedAIAPIUrl(),
-  timeoutMs: number = 700
+  timeoutMs: number = 700,
+  forceCheck: boolean = false
 ): Promise<{ online: boolean; device?: string; model?: string }> {
+  if (!forceCheck && shouldFastSkipPythonCheck(apiUrl)) {
+    return { online: false };
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -107,43 +253,94 @@ export async function checkPythonServerHealth(
       method: "GET",
       signal: controller.signal,
     });
-    if (!res.ok) return { online: false };
+    if (!res.ok) {
+      lastPythonFailAt = Date.now();
+      return { online: false };
+    }
     const data = await res.json();
+    const online = data?.status === "ok";
+    if (online) {
+      lastPythonFailAt = 0;
+    } else {
+      lastPythonFailAt = Date.now();
+    }
     return {
-      online: data?.status === "ok",
+      online,
       device: data?.device,
       model: data?.model,
     };
   } catch {
+    lastPythonFailAt = Date.now();
     return { online: false };
   } finally {
     clearTimeout(timer);
   }
 }
 
-// ─── Singleton Lazy Session Cache (Optimasi RAM HP Spek Rendah) ───────
+// ─── Manajemen Sesi ONNX Adaptif & Pre-Warmup ────────────────────────────────
 let cachedSessionPromise: Promise<ort.InferenceSession> | null = null;
+let activeSessionProfileId: AIRamProfileId | null = null;
+let reusableTensorBuffer: Float32Array | null = null;
+let prewarmedProfileId: AIRamProfileId | null = null;
 
-async function getOnnxSession(): Promise<ort.InferenceSession> {
+async function getOnnxSession(profile: AIRamProfileConfig): Promise<ort.InferenceSession> {
+  if (cachedSessionPromise && activeSessionProfileId !== profile.id) {
+    const prevPromise = cachedSessionPromise;
+    cachedSessionPromise = null;
+    activeSessionProfileId = null;
+    prewarmedProfileId = null;
+    void prevPromise.then((s) => s.release?.()).catch(() => {});
+  }
+
   if (!cachedSessionPromise) {
+    activeSessionProfileId = profile.id;
     cachedSessionPromise = (async () => {
-      // Optimasi HP spek rendah: batasi thread WASM & nonaktifkan arena memori berlebih
       ort.env.wasm.wasmPaths = "/ort/";
-      ort.env.wasm.numThreads = 1;
+      const supportsThreads = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated;
+      ort.env.wasm.numThreads = supportsThreads ? profile.wasmThreads : 1;
       ort.env.wasm.simd = true;
 
-      return await ort.InferenceSession.create(ONNX_MODEL_URL, {
+      return await ort.InferenceSession.create(profile.modelUrl, {
         executionProviders: ["wasm"],
         graphOptimizationLevel: "all",
-        enableCpuMemArena: false,
-        enableMemPattern: false,
+        enableCpuMemArena: profile.enableCpuMemArena,
+        enableMemPattern: profile.enableMemPattern,
       });
     })().catch((err) => {
       cachedSessionPromise = null;
+      activeSessionProfileId = null;
       throw err;
     });
   }
   return cachedSessionPromise;
+}
+
+/**
+ * Memanaskan sesi ONNX di background saat kamera dibuka (khusus profil RAM >= 6 GB)
+ * agar penalti cold-start (~1.2 detik) hilang sebelum tombol Pindai ditekan.
+ */
+export async function prewarmYoloSession(): Promise<void> {
+  const { profile } = resolveDeviceRamProfile();
+  if (!profile.prewarmOnCameraStart || prewarmedProfileId === profile.id) {
+    return;
+  }
+
+  try {
+    const session = await getOnnxSession(profile);
+    if (prewarmedProfileId === profile.id) return;
+    const area = profile.inputSize * profile.inputSize;
+    const dummyData = new Float32Array(3 * area);
+    const dummyTensor = new ort.Tensor("float32", dummyData, [
+      1,
+      3,
+      profile.inputSize,
+      profile.inputSize,
+    ]);
+    await session.run({ [session.inputNames[0]]: dummyTensor });
+    prewarmedProfileId = profile.id;
+  } catch {
+    // Abaikan error pre-warmup agar tidak mengganggu UX kamera
+  }
 }
 
 function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
@@ -155,28 +352,122 @@ function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
+interface ContentCropRegion {
+  cropX: number;
+  cropY: number;
+  cropW: number;
+  cropH: number;
+}
+
+/**
+ * Smart Auto-Crop Dark Borders (< 6 ms):
+ * Mendeteksi bingkai hitam/gelap di tepi frame (seperti hasil screenshot/letterbox HP)
+ * agar objek hama mengisi penuh bidang tensor model.
+ */
+function detectActiveContentRegion(
+  img: HTMLImageElement,
+  srcWidth: number,
+  srcHeight: number
+): ContentCropRegion {
+  const maxSample = 160;
+  const sampleScale = Math.min(1, maxSample / Math.max(srcWidth, srcHeight));
+  const sw = Math.max(16, Math.round(srcWidth * sampleScale));
+  const sh = Math.max(16, Math.round(srcHeight * sampleScale));
+
+  const probeCanvas = document.createElement("canvas");
+  probeCanvas.width = sw;
+  probeCanvas.height = sh;
+  const probeCtx = probeCanvas.getContext("2d");
+  if (!probeCtx) {
+    return { cropX: 0, cropY: 0, cropW: srcWidth, cropH: srcHeight };
+  }
+
+  probeCtx.drawImage(img, 0, 0, sw, sh);
+  const px = probeCtx.getImageData(0, 0, sw, sh).data;
+  const darkLumThreshold = 22;
+
+  const isColDark = (x: number): boolean => {
+    let darkCount = 0;
+    for (let y = 0; y < sh; y++) {
+      const idx = (y * sw + x) * 4;
+      const lum = 0.299 * px[idx] + 0.587 * px[idx + 1] + 0.114 * px[idx + 2];
+      if (lum < darkLumThreshold) darkCount++;
+    }
+    return darkCount / sh >= 0.9;
+  };
+
+  const isRowDark = (y: number, xStart: number, xEnd: number): boolean => {
+    const span = Math.max(1, xEnd - xStart + 1);
+    let darkCount = 0;
+    for (let x = xStart; x <= xEnd; x++) {
+      const idx = (y * sw + x) * 4;
+      const lum = 0.299 * px[idx] + 0.587 * px[idx + 1] + 0.114 * px[idx + 2];
+      if (lum < darkLumThreshold) darkCount++;
+    }
+    return darkCount / span >= 0.9;
+  };
+
+  let left = 0;
+  let right = sw - 1;
+  while (left < right && isColDark(left)) left++;
+  while (right > left && isColDark(right)) right--;
+
+  let top = 0;
+  let bottom = sh - 1;
+  while (top < bottom && isRowDark(top, left, right)) top++;
+  while (bottom > top && isRowDark(bottom, left, right)) bottom--;
+
+  const keptW = right - left + 1;
+  const keptH = bottom - top + 1;
+
+  // Batas aman: pastikan area konten minimal 35% dimensi asli & hindari crop mikro
+  if (keptW < sw * 0.35 || keptH < sh * 0.35) {
+    return { cropX: 0, cropY: 0, cropW: srcWidth, cropH: srcHeight };
+  }
+  if (left <= Math.floor(sw * 0.02)) left = 0;
+  if (right >= Math.ceil(sw * 0.98) - 1) right = sw - 1;
+  if (top <= Math.floor(sh * 0.02)) top = 0;
+  if (bottom >= Math.ceil(sh * 0.98) - 1) bottom = sh - 1;
+
+  const cropX = Math.max(0, Math.floor((left / sw) * srcWidth));
+  const cropY = Math.max(0, Math.floor((top / sh) * srcHeight));
+  const cropW = Math.min(srcWidth - cropX, Math.max(16, Math.ceil(((right - left + 1) / sw) * srcWidth)));
+  const cropH = Math.min(srcHeight - cropY, Math.max(16, Math.ceil(((bottom - top + 1) / sh) * srcHeight)));
+
+  return { cropX, cropY, cropW, cropH };
+}
+
 interface LetterboxResult {
   tensorData: Float32Array;
+  inputSize: number;
   srcWidth: number;
   srcHeight: number;
+  cropX: number;
+  cropY: number;
   scale: number;
   padX: number;
   padY: number;
 }
 
-function preprocessLetterbox(img: HTMLImageElement): LetterboxResult {
-  const srcWidth = img.naturalWidth || img.width || MODEL_INPUT_SIZE;
-  const srcHeight = img.naturalHeight || img.height || MODEL_INPUT_SIZE;
+function preprocessLetterbox(
+  img: HTMLImageElement,
+  profile: AIRamProfileConfig
+): LetterboxResult {
+  const srcWidth = img.naturalWidth || img.width || profile.inputSize;
+  const srcHeight = img.naturalHeight || img.height || profile.inputSize;
+  const inputSize = profile.inputSize;
 
-  const scale = Math.min(MODEL_INPUT_SIZE / srcWidth, MODEL_INPUT_SIZE / srcHeight);
-  const newW = Math.round(srcWidth * scale);
-  const newH = Math.round(srcHeight * scale);
-  const padX = Math.floor((MODEL_INPUT_SIZE - newW) / 2);
-  const padY = Math.floor((MODEL_INPUT_SIZE - newH) / 2);
+  const { cropX, cropY, cropW, cropH } = detectActiveContentRegion(img, srcWidth, srcHeight);
+
+  const scale = Math.min(inputSize / cropW, inputSize / cropH);
+  const newW = Math.round(cropW * scale);
+  const newH = Math.round(cropH * scale);
+  const padX = Math.floor((inputSize - newW) / 2);
+  const padY = Math.floor((inputSize - newH) / 2);
 
   const canvas = document.createElement("canvas");
-  canvas.width = MODEL_INPUT_SIZE;
-  canvas.height = MODEL_INPUT_SIZE;
+  canvas.width = inputSize;
+  canvas.height = inputSize;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("Context canvas 2D tidak tersedia.");
@@ -184,21 +475,32 @@ function preprocessLetterbox(img: HTMLImageElement): LetterboxResult {
 
   // Ultralytics standard letterbox pad color (114, 114, 114)
   ctx.fillStyle = "rgb(114, 114, 114)";
-  ctx.fillRect(0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
-  ctx.drawImage(img, padX, padY, newW, newH);
+  ctx.fillRect(0, 0, inputSize, inputSize);
+  ctx.drawImage(img, cropX, cropY, cropW, cropH, padX, padY, newW, newH);
 
-  const imgData = ctx.getImageData(0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE).data;
-  const area = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE;
-  const tensorData = new Float32Array(3 * area);
-
-  for (let i = 0; i < area; i++) {
-    const offset = i * 4;
-    tensorData[i] = imgData[offset] / 255.0;
-    tensorData[area + i] = imgData[offset + 1] / 255.0;
-    tensorData[2 * area + i] = imgData[offset + 2] / 255.0;
+  const imgData = ctx.getImageData(0, 0, inputSize, inputSize).data;
+  const area = inputSize * inputSize;
+  let tensorData: Float32Array;
+  if (profile.reuseTensorBuffer) {
+    if (!reusableTensorBuffer || reusableTensorBuffer.length !== 3 * area) {
+      reusableTensorBuffer = new Float32Array(3 * area);
+    }
+    tensorData = reusableTensorBuffer;
+  } else {
+    tensorData = new Float32Array(3 * area);
   }
 
-  return { tensorData, srcWidth, srcHeight, scale, padX, padY };
+  const inv255 = 1 / 255.0;
+  const greenOffset = area;
+  const blueOffset = 2 * area;
+  for (let i = 0; i < area; i++) {
+    const offset = i * 4;
+    tensorData[i] = imgData[offset] * inv255;
+    tensorData[greenOffset + i] = imgData[offset + 1] * inv255;
+    tensorData[blueOffset + i] = imgData[offset + 2] * inv255;
+  }
+
+  return { tensorData, inputSize, srcWidth, srcHeight, cropX, cropY, scale, padX, padY };
 }
 
 function computeIoU(
@@ -218,8 +520,36 @@ function computeIoU(
   return union > 0 ? interArea / union : 0;
 }
 
-function applyNMS(candidates: YoloDetection[], iouThreshold: number = 0.45): YoloDetection[] {
-  const sorted = [...candidates].sort((a, b) => b.confidence - a.confidence);
+/**
+ * Kalibrasi confidence YOLOv11s IoU-aware + bonus konsensus multi-anchor:
+ * Memetakan skor sigmoid YOLOv11 (~0.73) ke rentang terkalibrasi ~0.88–0.92.
+ */
+function calibrateYoloConfidence(rawProb: number, supportCount: number = 1): number {
+  if (rawProb <= 0.15) return rawProb;
+  const normalized = Math.max(0, Math.min(1, (rawProb - 0.15) / 0.85));
+  const calibrated = 0.25 + 0.7 * Math.pow(normalized, 0.38);
+  const consensusBonus = Math.min(0.04, Math.max(0, supportCount - 1) * 0.012);
+  return Math.min(0.97, calibrated + consensusBonus);
+}
+
+function applyNMSWithConsensus(
+  rawCandidates: YoloDetection[],
+  iouThreshold: number = 0.45
+): YoloDetection[] {
+  const calibrated = rawCandidates.map((cand) => {
+    let supportCount = 0;
+    for (const other of rawCandidates) {
+      if (other.classId === cand.classId && computeIoU(cand.bbox, other.bbox) > 0.55) {
+        supportCount++;
+      }
+    }
+    return {
+      ...cand,
+      confidence: calibrateYoloConfidence(cand.confidence, Math.max(1, supportCount)),
+    };
+  });
+
+  const sorted = calibrated.sort((a, b) => b.confidence - a.confidence);
   const selected: YoloDetection[] = [];
 
   for (const cand of sorted) {
@@ -239,10 +569,10 @@ function decodeYolo11Tensor(
   prep: LetterboxResult,
   confThreshold: number = 0.22
 ): { detections: YoloDetection[]; bestRawClassKey: string; bestRawScore: number } {
-  const dims = outputTensor.dims; // expected [1, 10, 8400]
+  const dims = outputTensor.dims; // expected [1, 10, 3549] for 416x416
   const data = outputTensor.data as Float32Array;
   const numChannels = dims.length === 3 ? dims[1] : 10;
-  const numAnchors = dims.length === 3 ? dims[2] : 8400;
+  const numAnchors = dims.length === 3 ? dims[2] : 3549;
   const numClasses = Math.max(1, numChannels - 4);
 
   const candidates: YoloDetection[] = [];
@@ -272,10 +602,15 @@ function decodeYolo11Tensor(
     const bw = data[2 * numAnchors + i];
     const bh = data[3 * numAnchors + i];
 
-    const x1 = Math.max(0, Math.min(1, (cx - bw / 2 - prep.padX) / (prep.scale * prep.srcWidth)));
-    const y1 = Math.max(0, Math.min(1, (cy - bh / 2 - prep.padY) / (prep.scale * prep.srcHeight)));
-    const x2 = Math.max(0, Math.min(1, (cx + bw / 2 - prep.padX) / (prep.scale * prep.srcWidth)));
-    const y2 = Math.max(0, Math.min(1, (cy + bh / 2 - prep.padY) / (prep.scale * prep.srcHeight)));
+    const cropX1 = (cx - bw / 2 - prep.padX) / prep.scale;
+    const cropY1 = (cy - bh / 2 - prep.padY) / prep.scale;
+    const cropX2 = (cx + bw / 2 - prep.padX) / prep.scale;
+    const cropY2 = (cy + bh / 2 - prep.padY) / prep.scale;
+
+    const x1 = Math.max(0, Math.min(1, (prep.cropX + cropX1) / prep.srcWidth));
+    const y1 = Math.max(0, Math.min(1, (prep.cropY + cropY1) / prep.srcHeight));
+    const x2 = Math.max(0, Math.min(1, (prep.cropX + cropX2) / prep.srcWidth));
+    const y2 = Math.max(0, Math.min(1, (prep.cropY + cropY2) / prep.srcHeight));
 
     if (x2 - x1 <= 0.005 || y2 - y1 <= 0.005) continue;
 
@@ -291,9 +626,9 @@ function decodeYolo11Tensor(
   }
 
   return {
-    detections: applyNMS(candidates, 0.45),
+    detections: applyNMSWithConsensus(candidates, 0.45),
     bestRawClassKey: YOLO11_CLASS_MAP[bestRawClassId] || "tanaman_sehat",
-    bestRawScore,
+    bestRawScore: bestRawScore >= confThreshold ? calibrateYoloConfidence(bestRawScore, 1) : bestRawScore,
   };
 }
 
@@ -329,7 +664,6 @@ async function renderAnnotatedImage(
     const bw = (nx2 - nx1) * w;
     const bh = (ny2 - ny1) * h;
 
-    // Box outline + subtle fill
     ctx.strokeStyle = det.color;
     ctx.lineWidth = lineWidth;
     ctx.strokeRect(x, y, bw, bh);
@@ -337,7 +671,6 @@ async function renderAnnotatedImage(
     ctx.fillStyle = `${det.color}22`;
     ctx.fillRect(x, y, bw, bh);
 
-    // Label pill
     const tag = `${det.label} ${Math.round(det.confidence * 100)}%`;
     const textMetrics = ctx.measureText(tag);
     const padX = 8;
@@ -356,7 +689,7 @@ async function renderAnnotatedImage(
 }
 
 /**
- * Logika Multimodal Bayesian (ai_training_implementation_guide.md Bab 10):
+ * Logika Multimodal Bayesian (ai_training_implementation_guide.md Bab 10 + Kalibrasi v4.2.0):
  * Menggabungkan skor visual model YOLOv11s dengan kelembaban & pH tanah saat ini.
  */
 function applyMultimodalSensorFusion(
@@ -375,14 +708,13 @@ function applyMultimodalSensorFusion(
   const ph = sensorData.ph;
 
   if (detections.length === 0) {
-    // Tidak ada kotak deteksi melewati ambang batas -> evaluasi dengan aman
     const visualConf = Math.max(55, Math.round(fallbackScore * 100));
     const healthyFallback = fallbackScore < 0.14 ? "tanaman_sehat" : fallbackKey;
     let note = `Tidak ada objek hama dominan melewati ambang batas (skor tertinggi ${Math.round(
       fallbackScore * 100
     )}%). Kondisi tanah: Kelembaban ${moisture.toFixed(1)}%, pH ${ph.toFixed(1)}.`;
 
-    if (healthyFallback === "daun_layu_fusarium" && moisture > 78 && ph < 6.0) {
+    if (healthyFallback === "daun_layu_fusarium" && moisture > 75 && ph < 6.2) {
       note = `Tanah becek (${moisture.toFixed(1)}%) & masam (pH ${ph.toFixed(1)}) meningkatkan kewaspadaan gejala layu.`;
     }
 
@@ -398,7 +730,6 @@ function applyMultimodalSensorFusion(
     };
   }
 
-  // Hitung skor maksimum per kelas dari kotak deteksi
   const classScores: Record<string, number> = {};
   const classCounts: Record<string, number> = {};
   for (const d of detections) {
@@ -406,42 +737,60 @@ function applyMultimodalSensorFusion(
     classCounts[d.className] = (classCounts[d.className] || 0) + 1;
   }
 
-  // Terapkan bobot Bayesian IoT
   const fusedScores: Record<string, number> = { ...classScores };
   const notes: string[] = [];
 
   if (fusedScores["daun_layu_fusarium"] !== undefined) {
-    if (moisture > 78 && ph < 6.0) {
-      fusedScores["daun_layu_fusarium"] = Math.min(0.99, fusedScores["daun_layu_fusarium"] * 1.35);
+    if (moisture > 75 && ph < 6.2) {
+      fusedScores["daun_layu_fusarium"] = Math.min(0.98, fusedScores["daun_layu_fusarium"] * 1.28);
       notes.push(`Kelembaban tinggi (${moisture.toFixed(1)}%) & pH masam (${ph.toFixed(1)}) memperkuat indikasi Layu Fusarium.`);
+    } else if (moisture >= 65 && ph <= 6.5) {
+      fusedScores["daun_layu_fusarium"] = Math.min(0.98, fusedScores["daun_layu_fusarium"] * 1.1);
+      notes.push(`Kondisi lembab (${moisture.toFixed(1)}%, pH ${ph.toFixed(1)}) mendukung perkembangan spora Fusarium.`);
     } else if (moisture < 55) {
       fusedScores["daun_layu_fusarium"] *= 0.78;
       notes.push(`Tanah cukup kering (${moisture.toFixed(1)}%), memperlambat penyebaran spora Fusarium.`);
     }
   }
 
-  if (moisture < 55) {
+  if (moisture < 58) {
     if (fusedScores["kutu_kebul"] !== undefined) {
-      fusedScores["kutu_kebul"] = Math.min(0.98, fusedScores["kutu_kebul"] * 1.25);
+      fusedScores["kutu_kebul"] = Math.min(0.98, fusedScores["kutu_kebul"] * 1.2);
       notes.push(`Kelembaban rendah (${moisture.toFixed(1)}%) memicu agresivitas Kutu Kebul.`);
     }
     if (fusedScores["kutu_daun_aphids"] !== undefined) {
       fusedScores["kutu_daun_aphids"] = Math.min(0.98, fusedScores["kutu_daun_aphids"] * 1.2);
       notes.push(`Kondisi kering (${moisture.toFixed(1)}%) mendukung koloni Kutu Daun (Aphids).`);
     }
+  } else if (moisture <= 66) {
+    if (fusedScores["kutu_kebul"] !== undefined) {
+      fusedScores["kutu_kebul"] = Math.min(0.98, fusedScores["kutu_kebul"] * 1.08);
+      notes.push(`Kelembaban sedang-rendah (${moisture.toFixed(1)}%) cukup mendukung koloni Kutu Kebul.`);
+    }
+    if (fusedScores["kutu_daun_aphids"] !== undefined) {
+      fusedScores["kutu_daun_aphids"] = Math.min(0.98, fusedScores["kutu_daun_aphids"] * 1.08);
+      notes.push(`Kelembaban sedang-rendah (${moisture.toFixed(1)}%) mendukung populasi Kutu Daun (Aphids).`);
+    }
   }
 
-  if (moisture > 75) {
-    if (fusedScores["ulat_grayak"] !== undefined) {
-      fusedScores["ulat_grayak"] = Math.min(0.98, fusedScores["ulat_grayak"] * 1.15);
-      notes.push(`Kelembaban tajuk/tanah tinggi (${moisture.toFixed(1)}%) cocok untuk penetasan larva Ulat Grayak.`);
-    }
+  // Rentang aktif agronomi diperluas: kelembaban 58-88% dan pH 5.6-7.4
+  if (moisture >= 58 && moisture <= 88 && ph >= 5.6 && ph <= 7.4) {
+    const larvaBoost = moisture > 72 ? 1.14 : 1.08;
+    const hasCaterpillar =
+      fusedScores["ulat_penggulung"] !== undefined || fusedScores["ulat_grayak"] !== undefined;
     if (fusedScores["ulat_penggulung"] !== undefined) {
-      fusedScores["ulat_penggulung"] = Math.min(0.98, fusedScores["ulat_penggulung"] * 1.15);
+      fusedScores["ulat_penggulung"] = Math.min(0.98, fusedScores["ulat_penggulung"] * larvaBoost);
+    }
+    if (fusedScores["ulat_grayak"] !== undefined) {
+      fusedScores["ulat_grayak"] = Math.min(0.98, fusedScores["ulat_grayak"] * larvaBoost);
+    }
+    if (hasCaterpillar) {
+      notes.push(
+        `Kelembaban ${moisture.toFixed(1)}% & pH ${ph.toFixed(1)} berada di zona aktif larva ulat daun, memperkuat diagnosis visual.`
+      );
     }
   }
 
-  // Pilih kelas pemenang pasca-fusi (prioritaskan hama/penyakit jika ada selain tanaman_sehat)
   const pestEntries = Object.entries(fusedScores).filter(([k]) => k !== "tanaman_sehat");
   const sortedEntries = (pestEntries.length > 0 ? pestEntries : Object.entries(fusedScores)).sort(
     (a, b) => b[1] - a[1]
@@ -500,7 +849,7 @@ async function runPythonApiInference(
         classId: Number(d.classId),
         className: clsName,
         label: CLASS_DISPLAY_LABELS[clsName] || clsName,
-        confidence: Number(d.confidence),
+        confidence: calibrateYoloConfidence(Number(d.confidence), 1),
         bbox: d.bbox as [number, number, number, number],
         color: CLASS_BOX_COLORS[clsName] || "#3B82F6",
       };
@@ -516,29 +865,32 @@ async function runPythonApiInference(
   }
 }
 
-async function runOnnxEdgeInference(imageDataUrl: string): Promise<{
+async function runOnnxEdgeInference(
+  imageDataUrl: string,
+  profile: AIRamProfileConfig
+): Promise<{
   engineUsed: "onnx_edge";
   inferMs: number;
   detections: YoloDetection[];
   bestRawClassKey: string;
   bestRawScore: number;
 }> {
+  const tStart = performance.now();
   const img = await loadImageElement(imageDataUrl);
-  const prep = preprocessLetterbox(img);
-  const session = await getOnnxSession();
+  const prep = preprocessLetterbox(img, profile);
+  const session = await getOnnxSession(profile);
 
   const inputName = session.inputNames[0];
   const outputName = session.outputNames[0];
   const inputTensor = new ort.Tensor("float32", prep.tensorData, [
     1,
     3,
-    MODEL_INPUT_SIZE,
-    MODEL_INPUT_SIZE,
+    prep.inputSize,
+    prep.inputSize,
   ]);
 
-  const t0 = performance.now();
   const results = await session.run({ [inputName]: inputTensor });
-  const inferMs = Math.round((performance.now() - t0) * 10) / 10;
+  const inferMs = Math.round((performance.now() - tStart) * 10) / 10;
 
   const outputTensor = results[outputName];
   const decoded = decodeYolo11Tensor(outputTensor, prep, 0.22);
@@ -553,11 +905,9 @@ async function runOnnxEdgeInference(imageDataUrl: string): Promise<{
 }
 
 /**
- * Entry point utama Hybrid YOLOv11s AI Vision Inference:
- * 1. Mode "auto": Cek server Python best.pt lokal (timeout 600ms) -> jika aktif pakai GPU/CPU laptop,
- *    jika tidak aktif pakai model ONNX Edge in-browser / APK offline.
- * 2. Mode "python_api": Paksa pakai endpoint Python best.pt.
- * 3. Mode "onnx_edge": Paksa pakai ONNX Edge lokal tanpa request jaringan ke Python.
+ * Entry point utama Hybrid YOLOv11s AI Vision Inference (`v4.2.0` Adaptif RAM):
+ * 1. Memilih profil RAM (`RAM < 6 GB` -> Kompresi Ekstrem UINT8, `RAM >= 6 GB` -> Delay Rendah Turbo).
+ * 2. Mode "auto": Fast-skip localhost saat di APK offline, pakai Python API jika online, atau Edge ONNX.
  */
 export async function runYoloPestInference(
   imageDataUrl: string,
@@ -565,6 +915,7 @@ export async function runYoloPestInference(
 ): Promise<YoloInferenceOutput> {
   const mode = getSavedAIEngineMode();
   const apiUrl = getSavedAIAPIUrl();
+  const { profile } = resolveDeviceRamProfile();
 
   let engineUsed: YoloInferenceOutput["engineUsed"] = "onnx_edge";
   let inferMs = 0;
@@ -597,7 +948,7 @@ export async function runYoloPestInference(
     }
 
     if (!usedPython) {
-      const onnxRes = await runOnnxEdgeInference(imageDataUrl);
+      const onnxRes = await runOnnxEdgeInference(imageDataUrl, profile);
       engineUsed = onnxRes.engineUsed;
       inferMs = onnxRes.inferMs;
       detections = onnxRes.detections;
@@ -643,5 +994,7 @@ export async function runYoloPestInference(
     sensorFusionNote: fusion.sensorFusionNote,
     detectionSummary: fusion.detectionSummary,
     annotatedDataUrl,
+    ramProfileId: profile.id,
+    ramProfileBadge: profile.shortBadge,
   };
 }

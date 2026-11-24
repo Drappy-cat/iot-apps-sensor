@@ -46,10 +46,11 @@ if errorlevel 1 (
 
 cd /d "%~dp0"
 echo [4/4] Menyalin file APK ke folder utama...
+copy /Y "android\app\build\outputs\apk\debug\app-debug.apk" "IoT-Sensor-NPK-v4.2.0.apk" >nul
 copy /Y "android\app\build\outputs\apk\debug\app-debug.apk" "IoT-Sensor-NPK-v4.1.0.apk" >nul
 
 echo.
 echo [SUKSES] File APK siap diinstall ke HP:
-echo   %cd%\IoT-Sensor-NPK-v4.1.0.apk
+echo   %cd%\IoT-Sensor-NPK-v4.2.0.apk
 echo ============================================================================
 endlocal
