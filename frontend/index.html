@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Plant Cam • ESP32-CAM Live Monitoring</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <div class="logo-badge">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a10 10 0 0 1 10 10c0 5.5-4.5 10-10 10S2 17.5 2 12A10 10 0 0 1 12 2z"/>
+            <path d="M12 6v6l4 2"/>
+            <path d="M7 16h10"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="app-title">Smart Plant Cam</h1>
+          <p class="app-subtitle">ESP32-CAM AI Thinker • Hybrid MQTT + WebSocket Relay</p>
+        </div>
+      </div>
+
+      <!-- Quick Status Badges -->
+      <div class="header-status-group">
+        <!-- ESP32 Hardware Status -->
+        <div class="status-pill" id="esp-status-pill" title="Status Fisik Perangkat ESP32-CAM">
+          <span class="status-dot dot-offline" id="esp-dot"></span>
+          <span class="status-label">ESP32:</span>
+          <strong class="status-value text-offline" id="esp-status-text">OFFLINE</strong>
+        </div>
+
+        <!-- Viewer Count -->
+        <div class="status-pill viewer-pill" title="Jumlah Viewer Aktif Saat Ini">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span id="active-viewers-count">0</span>
+          <span class="viewer-unit">viewer</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Video Frame Container -->
+    <main class="viewport-card">
+      <!-- Video Screen -->
+      <div class="screen-wrapper" id="screen-wrapper">
+        <!-- Live Image Element -->
+        <img id="live-stream-img" alt="ESP32-CAM Live Stream" class="stream-img hidden">
+
+        <!-- Standby Overlay (Active when camera is off) -->
+        <div class="standby-overlay" id="standby-overlay">
+          <div class="standby-icon-box">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
+          <h3 class="standby-title">Kamera dalam Mode Standby</h3>
+          <p class="standby-desc">ESP32-CAM dalam kondisi hemat daya & dingin. Klik tombol di bawah untuk meminta live video on-demand.</p>
+          <div class="standby-hint">
+            <span>⚡ Hemat Daya</span>
+            <span>❄️ Bebas Overheat</span>
+            <span>📡 On-Demand 8-10 FPS</span>
+          </div>
+        </div>
+
+        <!-- Loading / Connecting Spinner Overlay -->
+        <div class="loading-overlay hidden" id="loading-overlay">
+          <div class="spinner"></div>
+          <p class="loading-text" id="loading-text">Menghubungkan ke WebSocket Relay...</p>
+        </div>
+
+        <!-- Overlay HUD (Visible during stream) -->
+        <div class="stream-hud hidden" id="stream-hud">
+          <div class="hud-top">
+            <div class="hud-badge live-pulse">
+              <span class="hud-rec-dot"></span> LIVE VGA
+            </div>
+            <div class="hud-badge hud-fps" id="hud-fps">0 FPS</div>
+          </div>
+          <div class="hud-bottom">
+            <div class="hud-meta" id="hud-timestamp">--:--:--</div>
+            <div class="hud-meta">Res: 640x480 (JPEG)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action & Control Bar -->
+      <div class="controls-panel">
+        <button id="toggle-stream-btn" class="btn btn-primary btn-large">
+          <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span id="btn-text">Aktifkan Kamera</span>
+        </button>
+
+        <!-- Secondary Actions -->
+        <div class="secondary-actions">
+          <button id="snapshot-btn" class="btn btn-secondary" title="Ambil snapshot gambar saat ini" disabled>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Simpan Foto
+          </button>
+
+          <button id="config-btn" class="btn btn-icon" title="Pengaturan Server Host / Port">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- System Telemetry & Architecture Cards -->
+    <section class="info-grid">
+      <div class="info-card">
+        <div class="card-icon icon-mqtt">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 11a9 9 0 0 1 9 9"></path>
+            <path d="M4 4a16 16 0 0 1 16 16"></path>
+            <circle cx="5" cy="19" r="1"></circle>
+          </svg>
+        </div>
+        <div>
+          <h4>MQTT Control (LWT)</h4>
+          <p>Kontrol hemat daya via <code>tanaman/cam/cmd</code> & <code>tanaman/cam/status</code></p>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="card-icon icon-ws">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h4>WebSocket Video Relay</h4>
+          <p>Relay binary JPEG on-demand via <code>/ws/esp</code> & <code>/ws/client</code></p>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="card-icon icon-power">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+        </div>
+        <div>
+          <h4>Auto-Stop Power Saving</h4>
+          <p>Otomatis memutus koneksi kamera saat penonton menjadi 0</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Host Configuration Modal -->
+    <div class="modal-overlay hidden" id="config-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Pengaturan Alamat Server</h3>
+          <button class="modal-close" id="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <label for="server-host-input" class="form-label">Host / IP Backend Server:</label>
+          <input type="text" id="server-host-input" class="form-input" placeholder="contoh: localhost:5000 atau 192.168.1.50:5000">
+          <small class="form-help">Jika membuka file HTML langsung, masukkan IP laptop dan port server backend Anda (default: localhost:5000).</small>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="modal-reset-btn">Reset Bawaan</button>
+          <button class="btn btn-primary" id="modal-save-btn">Simpan Pengaturan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,30 @@
+{
+  "name": "esp32-cam-mqtt-ws-backend",
+  "version": "1.0.0",
+  "description": "Hybrid MQTT and WebSocket Relay Server for ESP32-CAM Smart Plant Monitoring",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "esp32-cam",
+    "mqtt",
+    "websocket",
+    "iot",
+    "camera-stream"
+  ],
+  "author": "Smart Agriculture IoT Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mqtt": "^5.8.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
+

@@ -62,9 +62,27 @@ ml_training/dataset_hama/test/labels/*
 !ml_training/dataset_hama/test/labels/.gitkeep
 ml_training/hasil_training_hama/*
 !ml_training/hasil_training_hama/.gitkeep
-ml_training/weights/*.pt
+ml_training/weights/# Environment variables & secrets
+.env
+.env.*
+*.env
+!.env.example
+!backend/.env.example
+
+# Arduino Firmware Sketches (.ino)
+*.ino
+firmware/*.ino
 ml_training/exports/*
 !ml_training/exports/.gitkeep
-*.pt
+# Environment variables & secrets
+.env
+.env.*
+*.env
+!.env.example
+!backend/.env.example
+
+# Arduino Firmware Sketches (.ino)
+*.ino
+firmware/*.ino
 
 
